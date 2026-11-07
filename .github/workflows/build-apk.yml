@@ -5,6 +5,9 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,3 +28,13 @@ jobs:
         with:
           name: voltix-apk
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Publicar en Releases (descarga directa)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk Voltix.apk
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest Voltix.apk --title "Voltix (última versión)" \
+            --notes "APK de Voltix compilado automáticamente. Descarga Voltix.apk e instálalo en tu móvil." \
+            --target "${{ github.sha }}"
