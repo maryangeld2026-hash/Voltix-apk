@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nexo Escritorio</string>
+    <string name="desktop_label">Escritorio Nexo</string>
+    <string name="tile_label">Escritorio</string>
+    <string name="notif_service_label">Notificaciones del escritorio Nexo</string>
+</resources>

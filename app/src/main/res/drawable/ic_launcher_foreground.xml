@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Marco del monitor -->
+    <path
+        android:fillColor="#E9EDFF"
+        android:pathData="M31,32h46a5,5 0 0 1 5,5v28a5,5 0 0 1 -5,5h-46a5,5 0 0 1 -5,-5v-28a5,5 0 0 1 5,-5z" />
+    <!-- Pantalla -->
+    <path
+        android:fillColor="#1C2246"
+        android:pathData="M32,36h44a2,2 0 0 1 2,2v24a2,2 0 0 1 -2,2h-44a2,2 0 0 1 -2,-2v-24a2,2 0 0 1 2,-2z" />
+    <!-- Cuatro ventanas -->
+    <path
+        android:fillColor="#7C9CFF"
+        android:pathData="M43.5,40.5h7.5a1.5,1.5 0 0 1 1.5,1.5v7.5h-9z" />
+    <path
+        android:fillColor="#B794F6"
+        android:pathData="M55.5,40.5h7.5a1.5,1.5 0 0 1 1.5,1.5v7.5h-9z" />
+    <path
+        android:fillColor="#4FD1C5"
+        android:pathData="M43.5,52.5h9v9h-7.5a1.5,1.5 0 0 1 -1.5,-1.5z" />
+    <path
+        android:fillColor="#F687B3"
+        android:pathData="M55.5,52.5h9v7.5a1.5,1.5 0 0 1 -1.5,1.5h-7.5z" />
+    <!-- Pie -->
+    <path
+        android:fillColor="#E9EDFF"
+        android:pathData="M50,70h8v6h-8z" />
+    <path
+        android:fillColor="#E9EDFF"
+        android:pathData="M44,76h20a1.5,1.5 0 0 1 1.5,1.5v0a1.5,1.5 0 0 1 -1.5,1.5h-20a1.5,1.5 0 0 1 -1.5,-1.5v0a1.5,1.5 0 0 1 1.5,-1.5z" />
+</vector>
