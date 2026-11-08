@@ -2,6 +2,7 @@ package com.nexo.escritorio
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherApps
 import android.os.Handler
 import android.os.Looper
@@ -29,6 +30,7 @@ data class AppEntry(
     val component: ComponentName,
     val user: UserHandle,
     val icon: ImageBitmap,
+    val isGame: Boolean = false,
 )
 
 /** Lista de apps instaladas, siempre al día (se recarga al instalar o desinstalar). */
@@ -72,6 +74,10 @@ object AppRepository {
                     } catch (e: Exception) {
                         continue
                     }
+                    val ai = info.applicationInfo
+                    @Suppress("DEPRECATION")
+                    val game = ai.category == ApplicationInfo.CATEGORY_GAME ||
+                        (ai.flags and ApplicationInfo.FLAG_IS_GAME) != 0
                     val key = component.flattenToString() + if (user == me) "" else "#${user.hashCode()}"
                     result += AppEntry(
                         key = key,
@@ -80,6 +86,7 @@ object AppRepository {
                         component = component,
                         user = user,
                         icon = icon,
+                        isGame = game,
                     )
                 }
             }

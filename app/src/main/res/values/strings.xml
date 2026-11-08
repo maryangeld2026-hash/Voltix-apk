@@ -4,4 +4,5 @@
     <string name="desktop_label">Escritorio Nexo</string>
     <string name="tile_label">Escritorio</string>
     <string name="notif_service_label">Notificaciones del escritorio Nexo</string>
+    <string name="a11y_description">Asistente de Nexo Escritorio. Permite ver las apps abiertas en la barra de tareas, usar la tecla Windows en cualquier app, hacer capturas, bloquear el teléfono y usar el teléfono como touchpad y teclado del monitor. Nexo no guarda ni envía el contenido de tus apps.</string>
 </resources>

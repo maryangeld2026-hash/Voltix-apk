@@ -197,6 +197,37 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                     )
                 }
 
+                Section("Juegos") {
+                    SwitchRow(
+                        "Abrir los juegos a pantalla completa",
+                        "La barra se esconde mientras juegas; tócala abajo o pulsa la tecla Windows para verla",
+                        NexoPrefs.gamesFullscreen,
+                    ) { NexoPrefs.changeGamesFullscreen(it) }
+                    Text(
+                        "Los mandos Bluetooth o USB funcionan directamente en los juegos que los admiten.",
+                        color = Nexo.textFaint,
+                        fontSize = 12.sp,
+                    )
+                }
+
+                Section("Barra de tareas y teclado") {
+                    SwitchRow(
+                        "Barra siempre visible",
+                        "Queda encima de las apps abiertas. Necesita el permiso «Mostrar sobre otras apps»",
+                        NexoPrefs.floatingBar,
+                    ) { NexoPrefs.changeFloatingBar(it) }
+                    SwitchRow(
+                        "Tecla Windows en todas las apps",
+                        "Abre el inicio aunque estés dentro de otra app (requiere el asistente de Nexo)",
+                        NexoPrefs.globalWinKey,
+                    ) { NexoPrefs.changeGlobalWinKey(it) }
+                    SwitchRow(
+                        "Girar a horizontal en el teléfono",
+                        "Cuando el escritorio se muestra en la pantalla del teléfono (modo espejo)",
+                        NexoPrefs.phoneLandscape,
+                    ) { NexoPrefs.changePhoneLandscape(it) }
+                }
+
                 Section("Escritorio") {
                     Text("Tamaño de los iconos", color = Nexo.textDim, fontSize = 13.sp)
                     Spacer(Modifier.height(10.dp))
@@ -214,6 +245,9 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                     Shortcut("Win + A", "Centro de control y notificaciones")
                     Shortcut("Win + E", "Archivos")
                     Shortcut("Win + I", "Ajustes de Nexo")
+                    Shortcut("Win + D", "Mostrar el escritorio")
+                    Shortcut("Win + T", "Touchpad en el teléfono")
+                    Shortcut("Clic derecho / Esc dentro de una app", "Volver atrás")
                     Shortcut("Ctrl + Esc", "Inicio (si tu teclado no tiene tecla Windows)")
                     Shortcut("Esc", "Cerrar menús")
                     Shortcut("Doble clic / Intro", "Abrir un icono del escritorio")

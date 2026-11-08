@@ -4,6 +4,8 @@
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Barra de tareas siempre visible encima de las apps (el usuario lo autoriza) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Opcional: se concede una sola vez por ADB para activar el modo escritorio con un botón -->
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"
@@ -61,6 +63,31 @@
             android:taskAffinity=""
             android:label="@string/desktop_label"
             android:theme="@android:style/Theme.NoDisplay" />
+
+        <!-- Touchpad: el teléfono controla el monitor -->
+        <activity
+            android:name=".TouchpadActivity"
+            android:exported="false"
+            android:label="Touchpad Nexo"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.nexo.escritorio.touchpad"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode" />
+
+        <!-- Asistente de Nexo (accesibilidad, opcional) -->
+        <service
+            android:name=".NexoAccessibility"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_config" />
+        </service>
 
         <!-- Notificaciones en el centro de control (el usuario lo autoriza) -->
         <service

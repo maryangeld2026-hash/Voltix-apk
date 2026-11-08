@@ -24,6 +24,7 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,6 +46,8 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DesktopWindows
 import androidx.compose.material.icons.rounded.FilterNone
 import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.CropFree
+import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.OpenInNew
@@ -55,6 +58,7 @@ import androidx.compose.material.icons.rounded.VerticalSplit
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -96,6 +100,7 @@ import com.nexo.escritorio.AppEntry
 import com.nexo.escritorio.AppRepository
 import com.nexo.escritorio.DesktopActions
 import com.nexo.escritorio.NexoPrefs
+import com.nexo.escritorio.NexoAccessibility
 import com.nexo.escritorio.NotificationService
 import com.nexo.escritorio.WindowLauncher
 import com.nexo.escritorio.WindowMode
@@ -108,20 +113,28 @@ class DesktopUi {
     var panelOpen by mutableStateOf(false)
     var settingsOpen by mutableStateOf(false)
     var menu by mutableStateOf<MenuSpec?>(null)
+    /** Menú contextual dibujado en la barra superpuesta. */
+    var overlayMenu by mutableStateOf<MenuSpec?>(null)
     var query by mutableStateOf("")
     var selected by mutableStateOf<String?>(null)
+    /** true cuando la barra vive en la capa superpuesta (siempre encima de las apps). */
+    var overlayActive by mutableStateOf(false)
+    /** Barra escondida (por ejemplo, con un juego a pantalla completa). */
+    var barHidden by mutableStateOf(false)
 
-    val anyOpen: Boolean get() = startOpen || panelOpen || settingsOpen || menu != null
+    val anyOpen: Boolean get() = startOpen || panelOpen || settingsOpen || menu != null || overlayMenu != null
 
     fun closeAll() {
         startOpen = false
         panelOpen = false
         settingsOpen = false
         menu = null
+        overlayMenu = null
     }
 
     fun toggleStart(initialQuery: String = "") {
         val open = !startOpen
+        barHidden = false
         closeAll()
         if (open) {
             query = initialQuery
@@ -167,6 +180,7 @@ fun DesktopRoot(actions: DesktopActions, ui: DesktopUi) {
 
     fun onKey(e: KeyEvent): Boolean {
         val isMeta = e.key == Key.MetaLeft || e.key == Key.MetaRight
+        if (isMeta && winKeyIsGlobal()) return false
         if (isMeta) {
             if (e.type == KeyEventType.KeyDown) metaCombo[0] = false
             else if (e.type == KeyEventType.KeyUp && !metaCombo[0]) ui.toggleStart()
@@ -179,7 +193,8 @@ fun DesktopRoot(actions: DesktopActions, ui: DesktopUi) {
                 Key.A, Key.N -> { ui.togglePanel(); return true }
                 Key.E -> { ui.closeAll(); actions.files(); return true }
                 Key.I -> { ui.openSettings(); return true }
-                Key.D -> { ui.closeAll(); return true }
+                Key.D -> { ui.closeAll(); actions.showDesktop(); return true }
+                Key.T -> { ui.closeAll(); actions.touchpad(); return true }
                 Key.S -> { ui.toggleStart(); return true }
             }
             return false
@@ -259,73 +274,9 @@ fun DesktopRoot(actions: DesktopActions, ui: DesktopUi) {
                 }
             }
 
-            // Un clic fuera del menú de inicio o del panel los cierra
-            if (ui.startOpen || ui.panelOpen) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .pointerInput(Unit) {
-                            detectTapGestures {
-                                ui.startOpen = false
-                                ui.panelOpen = false
-                            }
-                        }
-                )
+            if (!ui.overlayActive) {
+                ChromeLayer(actions, ui, maxW, maxH, expandedArea = true) { ui.menu = it }
             }
-
-            AnimatedVisibility(
-                visible = ui.startOpen,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = (TASKBAR_RESERVE_DP + 4).dp),
-                enter = fadeIn(tween(150)) +
-                    slideInVertically(tween(240, easing = FastOutSlowInEasing)) { it / 7 } +
-                    scaleIn(tween(240), initialScale = 0.96f, transformOrigin = TransformOrigin(0.5f, 1f)),
-                exit = fadeOut(tween(120)) +
-                    slideOutVertically(tween(160)) { it / 9 } +
-                    scaleOut(tween(160), targetScale = 0.97f, transformOrigin = TransformOrigin(0.5f, 1f)),
-            ) {
-                StartMenu(
-                    apps = apps,
-                    byKey = byKey,
-                    ui = ui,
-                    actions = actions,
-                    maxW = maxW - 24.dp,
-                    maxH = maxH - (TASKBAR_RESERVE_DP + 28).dp,
-                    onAppMenu = { app, pos -> ui.menu = appMenu(app, pos) },
-                )
-            }
-
-            AnimatedVisibility(
-                visible = ui.panelOpen,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 12.dp, bottom = (TASKBAR_RESERVE_DP + 4).dp),
-                enter = fadeIn(tween(150)) + slideInHorizontally(tween(240, easing = FastOutSlowInEasing)) { it / 5 },
-                exit = fadeOut(tween(120)) + slideOutHorizontally(tween(160)) { it / 6 },
-            ) {
-                ControlPanel(
-                    ui = ui,
-                    actions = actions,
-                    now = now,
-                    battery = battery,
-                    net = net,
-                    byPkg = byPkg,
-                    maxH = maxH - (TASKBAR_RESERVE_DP + 28).dp,
-                )
-            }
-
-            Taskbar(
-                modifier = Modifier.align(Alignment.BottomCenter),
-                byKey = byKey,
-                ui = ui,
-                actions = actions,
-                now = now,
-                battery = battery,
-                net = net,
-                notifCount = notifs.size,
-                onAppMenu = { app, pos -> ui.menu = appMenu(app, pos) },
-            )
 
             if (ui.settingsOpen) {
                 SettingsWindow(ui = ui, maxW = maxW, maxH = maxH)
@@ -336,17 +287,172 @@ fun DesktopRoot(actions: DesktopActions, ui: DesktopUi) {
     }
 }
 
+/** La tecla Windows la maneja el asistente cuando está activo (funciona sobre cualquier app). */
+fun winKeyIsGlobal(): Boolean = NexoPrefs.globalWinKey && NexoAccessibility.connected.value
+
+/** Claves de las apps abiertas en una pantalla: reales con el asistente, o las abiertas desde Nexo. */
+@Composable
+fun rememberRunning(displayId: Int, byPkg: Map<String, AppEntry>): List<String> {
+    val connected by NexoAccessibility.connected.collectAsState()
+    val running by NexoAccessibility.running.collectAsState()
+    return if (connected) {
+        running[displayId].orEmpty().mapNotNull { byPkg[it]?.key }.distinct()
+    } else {
+        WindowLauncher.opened.toList()
+    }
+}
+
+/** Barra de tareas, menú de inicio y centro de control. */
+@Composable
+fun BoxScope.ChromeLayer(
+    actions: DesktopActions,
+    ui: DesktopUi,
+    maxW: Dp,
+    maxH: Dp,
+    expandedArea: Boolean,
+    showMenu: (MenuSpec) -> Unit,
+) {
+    val apps by AppRepository.apps.collectAsState()
+    val byKey = remember(apps) { apps.associateBy { it.key } }
+    val byPkg = remember(apps) { apps.associateBy { it.packageName } }
+    val notifs by NotificationService.items.collectAsState()
+    val now by rememberNow()
+    val battery = rememberBattery()
+    val net = rememberNetwork()
+    val running = rememberRunning(actions.displayId, byPkg)
+    val appMenu: (AppEntry, Offset) -> Unit = { app, pos -> showMenu(buildAppMenu(app, pos, actions, ui)) }
+
+    if (expandedArea) {
+        // Un clic fuera del menú de inicio o del panel los cierra
+        if (ui.startOpen || ui.panelOpen) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures {
+                            ui.startOpen = false
+                            ui.panelOpen = false
+                        }
+                    }
+            )
+        }
+
+        AnimatedVisibility(
+            visible = ui.startOpen,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = (TASKBAR_RESERVE_DP + 4).dp),
+            enter = fadeIn(tween(150)) +
+                slideInVertically(tween(240, easing = FastOutSlowInEasing)) { it / 7 } +
+                scaleIn(tween(240), initialScale = 0.96f, transformOrigin = TransformOrigin(0.5f, 1f)),
+            exit = fadeOut(tween(120)) +
+                slideOutVertically(tween(160)) { it / 9 } +
+                scaleOut(tween(160), targetScale = 0.97f, transformOrigin = TransformOrigin(0.5f, 1f)),
+        ) {
+            StartMenu(
+                apps = apps,
+                byKey = byKey,
+                ui = ui,
+                actions = actions,
+                maxW = maxW - 24.dp,
+                maxH = maxH - (TASKBAR_RESERVE_DP + 28).dp,
+                onAppMenu = appMenu,
+            )
+        }
+
+        AnimatedVisibility(
+            visible = ui.panelOpen,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 12.dp, bottom = (TASKBAR_RESERVE_DP + 4).dp),
+            enter = fadeIn(tween(150)) + slideInHorizontally(tween(240, easing = FastOutSlowInEasing)) { it / 5 },
+            exit = fadeOut(tween(120)) + slideOutHorizontally(tween(160)) { it / 6 },
+        ) {
+            ControlPanel(
+                ui = ui,
+                actions = actions,
+                now = now,
+                battery = battery,
+                net = net,
+                byPkg = byPkg,
+                maxH = maxH - (TASKBAR_RESERVE_DP + 28).dp,
+            )
+        }
+    }
+
+    Taskbar(
+        modifier = Modifier.align(Alignment.BottomCenter),
+        byKey = byKey,
+        running = running,
+        ui = ui,
+        actions = actions,
+        now = now,
+        battery = battery,
+        net = net,
+        notifCount = notifs.size,
+        onAppMenu = appMenu,
+    )
+}
+
+/** Contenido de la barra superpuesta (encima de todas las apps). */
+@Composable
+fun BarChrome(actions: DesktopActions, ui: DesktopUi, expanded: Boolean, menuOffsetY: Float) {
+    CompositionLocalProvider(LocalTooltips provides false) {
+        BoxWithConstraints(
+            Modifier
+                .fillMaxSize()
+                .onPreviewKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown && e.key == Key.Escape && ui.anyOpen) {
+                        ui.closeAll()
+                        true
+                    } else if (e.type == KeyEventType.KeyUp && (e.key == Key.MetaLeft || e.key == Key.MetaRight) && !winKeyIsGlobal()) {
+                        ui.toggleStart()
+                        true
+                    } else {
+                        false
+                    }
+                }
+        ) {
+            val maxW = maxWidth
+            val maxH = maxHeight
+            if (ui.barHidden && !expanded) {
+                // Barra escondida: una franja fina que la muestra al pasar el ratón o tocar.
+                val source = remember { MutableInteractionSource() }
+                val hovered by source.collectIsHoveredAsState()
+                LaunchedEffect(hovered) { if (hovered) ui.barHidden = false }
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(LocalAccent.current.copy(alpha = 0.35f))
+                        .hoverable(source)
+                        .pointerInput(Unit) { detectTapGestures { ui.barHidden = false } }
+                )
+            } else {
+                ChromeLayer(actions, ui, maxW, maxH, expandedArea = expanded) { spec ->
+                    ui.overlayMenu = spec.copy(position = spec.position + Offset(0f, menuOffsetY))
+                }
+            }
+            if (expanded) {
+                ContextMenuHost(ui.overlayMenu) { ui.overlayMenu = null }
+            }
+        }
+    }
+}
+
 fun buildAppMenu(app: AppEntry, pos: Offset, actions: DesktopActions, ui: DesktopUi): MenuSpec {
     val pinned = app.key in NexoPrefs.taskbarPins
     val onDesktop = app.key in NexoPrefs.desktopItems
-    val close = { ui.startOpen = false; ui.panelOpen = false }
+    val close = { ui.startOpen = false; ui.panelOpen = false; ui.overlayMenu = null }
     return MenuSpec(
         position = pos,
         title = app.label,
         entries = listOf(
             MenuAction("Abrir", Icons.Rounded.OpenInNew) { close(); actions.launch(app) },
             MenuAction("Abrir en ventana", Icons.Rounded.FilterNone) { close(); actions.launch(app, WindowMode.WINDOW) },
-            MenuAction("Abrir maximizada", Icons.Rounded.Fullscreen) { close(); actions.launch(app, WindowMode.MAXIMIZED) },
+            MenuAction("Abrir maximizada", Icons.Rounded.CropFree) { close(); actions.launch(app, WindowMode.MAXIMIZED) },
+            MenuAction(if (app.isGame) "Jugar a pantalla completa" else "Pantalla completa", Icons.Rounded.Fullscreen) {
+                close(); actions.launch(app, WindowMode.FULLSCREEN)
+            },
             MenuAction("Mitad izquierda", Icons.Rounded.VerticalSplit) { close(); actions.launch(app, WindowMode.LEFT) },
             MenuAction("Mitad derecha", Icons.Rounded.VerticalSplit) { close(); actions.launch(app, WindowMode.RIGHT) },
             MenuAction("Nueva ventana", Icons.Rounded.Add) { close(); actions.launch(app, WindowMode.WINDOW, newInstance = true) },
@@ -386,6 +492,7 @@ private fun desktopMenu(
             actions.open(Intent(AndroidSettings.ACTION_DISPLAY_SETTINGS))
         },
         MenuAction("Ajustes de Nexo", Icons.Rounded.Tune) { ui.openSettings() },
+        MenuAction("Usar el teléfono como touchpad", Icons.Rounded.TouchApp) { actions.touchpad() },
     ),
 )
 

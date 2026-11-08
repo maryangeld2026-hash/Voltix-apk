@@ -1,6 +1,8 @@
 package com.nexo.escritorio.ui
 
 import android.view.Display
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,6 +10,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,23 +27,32 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Cast
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DesktopWindows
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Keyboard
+import androidx.compose.material.icons.rounded.Laptop
 import androidx.compose.material.icons.rounded.Mouse
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material.icons.rounded.ScreenShare
+import androidx.compose.material.icons.rounded.SportsEsports
+import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Usb
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
@@ -48,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nexo.escritorio.Displays
 import com.nexo.escritorio.MainActivity
+import com.nexo.escritorio.NexoAccessibility
 import com.nexo.escritorio.NexoPrefs
 
 data class SetupStatus(
@@ -57,21 +71,33 @@ data class SetupStatus(
     val resizable: Boolean?,
     val notifications: Boolean,
     val canWriteSettings: Boolean,
+    val overlay: Boolean,
+    val assistant: Boolean,
+    val isXiaomi: Boolean,
+    val phoneIp: String?,
 )
 
+private const val PKG = "com.nexo.escritorio"
+
 private const val GRANT_COMMAND =
-    "adb shell pm grant com.nexo.escritorio android.permission.WRITE_SECURE_SETTINGS"
+    "adb shell pm grant $PKG android.permission.WRITE_SECURE_SETTINGS"
 
 private const val MANUAL_COMMANDS = """adb shell settings put global enable_freeform_support 1
 adb shell settings put global force_resizable_activities 1
 adb shell settings put global force_desktop_mode_on_external_displays 1
 adb reboot"""
 
+private const val SCRCPY_USB = "scrcpy --new-display=1920x1080/160 --start-app=$PKG"
+
+private enum class Conn { CABLE, WIRELESS, PC, PHONE }
+
 /** Pantalla principal en el teléfono. */
 @Composable
 fun SetupScreen(tick: Int, display: Display?, host: MainActivity) {
     val status = remember(tick, display) { host.readStatus() }
     val accent = LocalAccent.current
+    var open by remember { mutableStateOf<Conn?>(null) }
+    val toggle: (Conn) -> Unit = { c -> open = if (open == c) null else c }
 
     Box(Modifier.fillMaxSize()) {
         Wallpaper(0, null, animated = true, modifier = Modifier.fillMaxSize())
@@ -80,11 +106,10 @@ fun SetupScreen(tick: Int, display: Display?, host: MainActivity) {
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .safeDrawingPadding()
-                .padding(horizontal = 18.dp, vertical = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(Modifier.widthIn(max = 620.dp).fillMaxWidth()) {
-                // Encabezado
+            Column(Modifier.widthIn(max = 640.dp).fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     NexoLogo(40.dp, accent)
                     Spacer(Modifier.width(14.dp))
@@ -93,86 +118,206 @@ fun SetupScreen(tick: Int, display: Display?, host: MainActivity) {
                         Text("Tu teléfono, convertido en un computador", color = Nexo.textDim, fontSize = 14.sp)
                     }
                 }
-                Spacer(Modifier.height(22.dp))
+                Spacer(Modifier.height(20.dp))
 
                 HeroCard(display, host)
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(22.dp))
 
+                Text("Formas de conexión", color = Nexo.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                Text("Elige la que tengas a mano. Puedes usar varias.", color = Nexo.textDim, fontSize = 13.sp)
+                Spacer(Modifier.height(12.dp))
+
+                ConnectionCard(
+                    icon = Icons.Rounded.Usb,
+                    title = "Cable USB‑C a HDMI",
+                    badge = "Teléfonos con salida de video",
+                    summary = "La mejor experiencia: escritorio a pantalla completa y el teléfono libre.",
+                    expanded = open == Conn.CABLE,
+                    onToggle = { toggle(Conn.CABLE) },
+                ) {
+                    MiniStep(1, "Conecta un cable o hub USB‑C a HDMI (con «DisplayPort Alt Mode») al monitor o TV.")
+                    MiniStep(2, "Conecta teclado y ratón por Bluetooth o al hub.")
+                    MiniStep(3, "El escritorio aparece solo en la pantalla.")
+                    Note("¿La pantalla se queda en negro? Tu teléfono no saca video por cable (pasa en Redmi, Redmi Note y muchos de gama media). Usa la conexión inalámbrica o la del computador.")
+                }
+
+                ConnectionCard(
+                    icon = Icons.Rounded.Cast,
+                    title = "Inalámbrica (Miracast)",
+                    badge = "Smart TV · Fire TV · PC con Windows",
+                    summary = "Sin cables, a una TV o a un portátil con Windows («Proyectar en este PC»).",
+                    expanded = open == Conn.WIRELESS,
+                    onToggle = { toggle(Conn.WIRELESS) },
+                ) {
+                    MiniStep(1, "En la TV activa «Duplicar pantalla» (Screen mirroring). En Windows abre «Proyectar en este PC» o la app «Conectar».")
+                    MiniStep(2, "Pulsa «Buscar pantallas» y elige tu TV o PC.")
+                    MiniStep(3, "Si la TV muestra el escritorio de Nexo, ¡listo! Si solo copia la pantalla del teléfono, pulsa «Escritorio en este teléfono».")
+                    Spacer(Modifier.height(10.dp))
+                    FlowRow2 {
+                        PrimaryButton("Buscar pantallas") { host.openCast() }
+                        GhostButton("Escritorio en este teléfono") { host.previewHere() }
+                    }
+                    Note("Por Wi‑Fi hay un poco de retraso: perfecto para trabajar, navegar y ver videos; para juegos rápidos es mejor el cable o el computador.")
+                }
+
+                ConnectionCard(
+                    icon = Icons.Rounded.Laptop,
+                    title = "Computador o portátil (scrcpy)",
+                    badge = "Casi cualquier teléfono · Android 10+",
+                    summary = "Crea una pantalla nueva en tu PC con el escritorio de Nexo, aunque tu teléfono no saque video. Incluye sonido.",
+                    expanded = open == Conn.PC,
+                    onToggle = { toggle(Conn.PC) },
+                ) {
+                    MiniStep(1, "Instala scrcpy en el computador (gratis, Windows, Mac o Linux). Búscalo como «scrcpy» en GitHub.")
+                    MiniStep(2, "En el teléfono: Opciones de desarrollador › activa «Depuración USB». Conecta el teléfono al PC con un cable USB normal.")
+                    MiniStep(3, "En el PC, abre una terminal en la carpeta de scrcpy y ejecuta:")
+                    CodeBlock(SCRCPY_USB) { host.copy(SCRCPY_USB) }
+                    Spacer(Modifier.height(6.dp))
+                    MiniStep(4, "Se abre una ventana con el escritorio de Nexo. Usa el teclado y el ratón del PC. Pulsa F11 o añade -f para pantalla completa.")
+                    Spacer(Modifier.height(8.dp))
+                    Text("Sin cable (por Wi‑Fi):", color = Nexo.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(6.dp))
+                    val ip = status.phoneIp ?: "IP-DEL-TELEFONO"
+                    val wifi = "adb tcpip 5555\nscrcpy --tcpip=$ip:5555 --new-display=1920x1080/160 --start-app=$PKG"
+                    CodeBlock(wifi) { host.copy(wifi) }
+                    Note(
+                        "La primera línea se ejecuta una vez con el cable puesto; después ya puedes desconectarlo." +
+                            if (status.phoneIp != null) " La IP de tu teléfono es $ip." else " Conéctate a una red Wi‑Fi para ver tu IP aquí."
+                    )
+                    Note("Para jugar con un mando conectado al PC, añade --gamepad=uhid al comando.")
+                }
+
+                ConnectionCard(
+                    icon = Icons.Rounded.PhoneAndroid,
+                    title = "Escritorio en este teléfono",
+                    badge = "Cualquier teléfono",
+                    summary = "El escritorio se muestra en el teléfono en horizontal. Duplica la pantalla en la TV (Chromecast, «Transmitir», Miracast) o úsalo con teclado y ratón Bluetooth.",
+                    expanded = open == Conn.PHONE,
+                    onToggle = { toggle(Conn.PHONE) },
+                ) {
+                    MiniStep(1, "Conecta teclado y ratón Bluetooth (opcional).")
+                    MiniStep(2, "Pulsa «Abrir escritorio aquí». El teléfono gira a horizontal.")
+                    MiniStep(3, "Para verlo en grande, duplica la pantalla en la TV con «Transmitir» o Google Home.")
+                    Spacer(Modifier.height(10.dp))
+                    FlowRow2 {
+                        PrimaryButton("Abrir escritorio aquí") { host.previewHere() }
+                        GhostButton("Transmitir pantalla") { host.openCast() }
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+                Card {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconBadge(Icons.Rounded.TouchApp)
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Usa el teléfono como touchpad", color = Nexo.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                            Text("¿Sin ratón? Mueve el puntero del monitor y escribe desde el teléfono.", color = Nexo.textDim, fontSize = 13.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    PrimaryButton("Abrir touchpad", Modifier.fillMaxWidth()) { host.openTouchpad() }
+                }
+
+                Spacer(Modifier.height(22.dp))
                 Card {
                     Text("Preparación (solo una vez)", color = Nexo.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Android ya sabe mostrar ventanas en un monitor; estos ajustes lo activan. No hace falta root.",
+                        "Activa lo que quieras usar. Los pasos 1 a 5 hacen que las apps se abran en ventanas.",
                         color = Nexo.textDim,
                         fontSize = 13.sp,
                     )
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(12.dp))
                     Step(
                         1, "Activa las opciones de desarrollador",
-                        "Ajustes › Acerca del teléfono › toca 7 veces «Número de compilación».",
+                        "Ajustes › Acerca del teléfono › toca 7 veces «Número de compilación» (en Xiaomi: «Versión de MIUI/HyperOS»).",
                         status.developerOptions, "Abrir ajustes", host::openAboutPhone,
                     )
                     Step(
                         2, "Activa «Ventanas de formato libre»",
-                        "En Opciones de desarrollador busca «Habilitar ventanas de formato libre» (Enable freeform windows). Así las apps se abren en ventanas que puedes mover y cambiar de tamaño.",
+                        "En Opciones de desarrollador (Enable freeform windows). Las apps se abren en ventanas que puedes mover y cambiar de tamaño.",
                         status.freeform, "Opciones de desarrollador", host::openDeveloperOptions,
                     )
                     Step(
                         3, "Activa «Forzar modo de escritorio»",
-                        "También en Opciones de desarrollador (Force desktop mode). El monitor se comporta como un escritorio.",
+                        "También en Opciones de desarrollador (Force desktop mode).",
                         status.forceDesktop, "Opciones de desarrollador", host::openDeveloperOptions,
                     )
                     Step(
-                        4, "Recomendado: «Forzar actividades redimensionables»",
-                        "Hace que casi todas las apps acepten abrirse en ventana (Force activities to be resizable).",
+                        4, "Activa «Forzar actividades redimensionables»",
+                        "Casi todas las apps aceptarán abrirse en ventana (Force activities to be resizable).",
                         status.resizable, "Opciones de desarrollador", host::openDeveloperOptions,
                     )
+                    Step(5, "Reinicia el teléfono", "Los pasos 2 a 4 se aplican después de reiniciar.", null, null, null)
                     Step(
-                        5, "Reinicia el teléfono",
-                        "Los pasos 2 a 4 se aplican después de reiniciar.",
-                        null, null, null,
+                        6, "Barra de tareas siempre visible",
+                        "Permite «Mostrar sobre otras apps» para que la barra quede encima de las ventanas, como en Windows.",
+                        status.overlay, "Permitir", host::openOverlayPermission,
                     )
                     Step(
-                        6, "Opcional: notificaciones en el escritorio",
-                        "Para verlas y abrirlas desde el centro de control del escritorio.",
+                        7, "Asistente de Nexo (recomendado)",
+                        "En Accesibilidad activa «Nexo Escritorio». Muestra las apps abiertas de verdad en la barra, hace que la tecla Windows funcione en cualquier app y activa el touchpad, la captura y el bloqueo.",
+                        status.assistant, "Abrir accesibilidad", host::openAccessibility,
+                    )
+                    if (!status.assistant) {
+                        Note("¿Aparece «Ajuste restringido»? Ve a Información de la app › menú ⋮ › «Permitir ajustes restringidos» y vuelve a intentarlo.")
+                        Text(
+                            "Abrir información de la app",
+                            color = accent,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .padding(start = 34.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { host.openAppDetails() }
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                        )
+                    }
+                    Step(
+                        8, "Notificaciones en el escritorio (opcional)",
+                        "Para verlas y abrirlas desde el centro de control.",
                         status.notifications, "Permitir", host::openNotificationAccess,
                     )
+                    if (status.isXiaomi) {
+                        Step(
+                            9, "Permiso extra de Xiaomi",
+                            "En Otros permisos activa «Mostrar ventanas emergentes mientras se ejecuta en segundo plano» y «Mostrar ventanas emergentes». Sin esto, Xiaomi bloquea abrir apps desde la barra.",
+                            null, "Abrir permisos", host::openXiaomiPermissions,
+                        )
+                    }
                 }
                 Spacer(Modifier.height(16.dp))
 
                 Card {
-                    Text("¿Tienes un computador? Actívalo todo con un clic", color = Nexo.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Text("¿Tienes un computador? Activa los pasos 2‑4 de una vez", color = Nexo.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Conecta el teléfono al PC con la depuración USB activada y ejecuta este comando una sola vez. Después vuelve aquí y pulsa «Activar todo».",
+                        "Con la depuración USB activada, ejecuta este comando una sola vez y pulsa «Activar todo».",
                         color = Nexo.textDim,
                         fontSize = 13.sp,
                     )
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(10.dp))
                     CodeBlock(GRANT_COMMAND) { host.copy(GRANT_COMMAND) }
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(10.dp))
                     if (status.canWriteSettings) {
                         PrimaryButton("Activar todo automáticamente", Modifier.fillMaxWidth()) { host.applyAllSettings() }
                     } else {
-                        Text(
-                            "Sin PC también funciona: usa la «Depuración inalámbrica» con una app como LADB o Shizuku para ejecutar el comando desde el propio teléfono.",
-                            color = Nexo.textFaint,
-                            fontSize = 12.sp,
-                        )
+                        Note("Sin PC también funciona: usa la «Depuración inalámbrica» con una app como LADB o Shizuku para ejecutar el comando desde el propio teléfono.")
                     }
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(10.dp))
                     Text("O todo por ADB, sin usar la app:", color = Nexo.textDim, fontSize = 13.sp)
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(6.dp))
                     CodeBlock(MANUAL_COMMANDS) { host.copy(MANUAL_COMMANDS) }
                 }
                 Spacer(Modifier.height(16.dp))
 
                 Card {
                     Text("Consejos", color = Nexo.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(10.dp))
-                    Tip(Icons.Rounded.Usb, "Si el monitor no muestra nada al conectar el cable, tu teléfono no tiene salida de video por USB‑C (DisplayPort Alt Mode). Prueba con otro adaptador o con transmisión inalámbrica.")
-                    Tip(Icons.Rounded.Keyboard, "Pulsa la tecla Windows para abrir el inicio, o simplemente empieza a escribir para buscar una app.")
-                    Tip(Icons.Rounded.Mouse, "Clic derecho en cualquier icono para abrirlo maximizado, a la izquierda, a la derecha o anclarlo a la barra.")
-                    Tip(Icons.Rounded.DesktopWindows, "Añade el mosaico «Escritorio» a los ajustes rápidos para abrir el escritorio con un toque.")
-                    Tip(Icons.Rounded.PhoneAndroid, "En Pixel y Samsung con escritorio propio, Nexo se abre a pantalla completa por encima de él.")
+                    Spacer(Modifier.height(8.dp))
+                    Tip(Icons.Rounded.Keyboard, "Tecla Windows: abre el inicio. Empieza a escribir para buscar cualquier app. Win+D muestra el escritorio.")
+                    Tip(Icons.Rounded.Mouse, "Clic derecho sobre una app: abrir en ventana, maximizada, a un lado, a pantalla completa o anclarla. Dentro de una app, el clic derecho o Esc vuelven atrás.")
+                    Tip(Icons.Rounded.SportsEsports, "Los juegos aparecen en su propia sección y se abren a pantalla completa. Los mandos Bluetooth o USB funcionan directamente.")
+                    Tip(Icons.Rounded.ScreenShare, "Añade el mosaico «Escritorio» a los ajustes rápidos para abrir el escritorio con un toque.")
+                    Tip(Icons.Rounded.DesktopWindows, "En Pixel y Samsung con escritorio propio, Nexo se abre a pantalla completa por encima de él.")
                 }
                 Spacer(Modifier.height(24.dp))
             }
@@ -187,23 +332,15 @@ private fun HeroCard(display: Display?, host: MainActivity) {
         if (display != null) {
             val size = remember(display) { Displays.sizeOf(display) }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .size(52.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(accent.copy(alpha = 0.18f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Rounded.DesktopWindows, null, tint = accent, modifier = Modifier.size(28.dp))
-                }
+                IconBadge(Icons.Rounded.DesktopWindows)
                 Spacer(Modifier.width(14.dp))
                 Column {
-                    Text("Monitor conectado", color = Nexo.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Pantalla conectada", color = Nexo.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     Text("${display.name} · ${size.x} × ${size.y}", color = Nexo.textDim, fontSize = 13.sp)
                 }
             }
             Spacer(Modifier.height(16.dp))
-            PrimaryButton("Abrir escritorio en el monitor", Modifier.fillMaxWidth()) { host.openDesktopOnMonitor() }
+            PrimaryButton("Abrir escritorio en la pantalla", Modifier.fillMaxWidth()) { host.openDesktopOnMonitor() }
         } else {
             Row(
                 Modifier.fillMaxWidth(),
@@ -211,30 +348,120 @@ private fun HeroCard(display: Display?, host: MainActivity) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(Icons.Rounded.PhoneAndroid, null, tint = Nexo.text, modifier = Modifier.size(34.dp))
-                Spacer(Modifier.width(10.dp))
-                Icon(Icons.Rounded.ChevronRight, null, tint = Nexo.textFaint)
-                Icon(Icons.Rounded.Usb, null, tint = accent, modifier = Modifier.size(26.dp))
-                Icon(Icons.Rounded.ChevronRight, null, tint = Nexo.textFaint)
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(12.dp))
+                Icon(Icons.Rounded.Usb, null, tint = accent, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(6.dp))
+                Icon(Icons.Rounded.Cast, null, tint = accent, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(6.dp))
+                Icon(Icons.Rounded.Laptop, null, tint = accent, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(12.dp))
                 Icon(Icons.Rounded.DesktopWindows, null, tint = Nexo.text, modifier = Modifier.size(40.dp))
             }
             Spacer(Modifier.height(14.dp))
-            Text("Conecta un monitor", color = Nexo.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text("Conecta una pantalla", color = Nexo.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                "Usa un cable o adaptador USB‑C a HDMI. Conecta teclado y ratón por Bluetooth o a un hub USB. El escritorio se abrirá solo.",
+                "Por cable, por Wi‑Fi o a través de tu computador. Cuando se detecte, el escritorio se abrirá solo.",
                 color = Nexo.textDim,
                 fontSize = 13.sp,
             )
             Spacer(Modifier.height(14.dp))
-            GhostButton("Ver una vista previa en este teléfono", Modifier.fillMaxWidth()) { host.previewHere() }
+            GhostButton("Probar el escritorio en este teléfono", Modifier.fillMaxWidth()) { host.previewHere() }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         SwitchRow(
             "Abrir automáticamente al conectar",
-            "Funciona mientras esta pantalla está abierta",
+            "También con la app cerrada si el asistente o las notificaciones de Nexo están activos",
             NexoPrefs.autoOpen,
         ) { NexoPrefs.changeAutoOpen(it) }
     }
+}
+
+@Composable
+private fun ConnectionCard(
+    icon: ImageVector,
+    title: String,
+    badge: String,
+    summary: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
+    Column(
+        Modifier
+            .padding(bottom = 10.dp)
+            .fillMaxWidth()
+            .glass(RoundedCornerShape(20.dp), 12.dp, 0.78f)
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconBadge(icon)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, color = Nexo.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text(badge, color = LocalAccent.current, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(4.dp))
+                Text(summary, color = Nexo.textDim, fontSize = 13.sp)
+            }
+            Icon(
+                Icons.Rounded.ExpandMore, null, tint = Nexo.textDim,
+                modifier = Modifier.size(24.dp).rotate(rotation),
+            )
+        }
+        AnimatedVisibility(expanded) {
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp), content = content)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FlowRow2(content: @Composable () -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) { content() }
+}
+
+@Composable
+private fun IconBadge(icon: ImageVector) {
+    val accent = LocalAccent.current
+    Box(
+        Modifier
+            .size(46.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(accent.copy(alpha = 0.18f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, null, tint = accent, modifier = Modifier.size(24.dp))
+    }
+}
+
+@Composable
+private fun MiniStep(n: Int, text: String) {
+    Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
+        Box(
+            Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.08f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("$n", color = Nexo.text, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(text, color = Nexo.textDim, fontSize = 13.sp, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun Note(text: String) {
+    Text(text, color = Nexo.textFaint, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
 }
 
 @Composable
@@ -356,10 +583,10 @@ private fun PrimaryButton(label: String, modifier: Modifier = Modifier, onClick:
             .clip(RoundedCornerShape(14.dp))
             .background(accent)
             .clickable(onClick = onClick)
-            .padding(vertical = 14.dp, horizontal = 18.dp),
+            .padding(vertical = 13.dp, horizontal = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = Nexo.onAccent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, color = Nexo.onAccent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -371,7 +598,7 @@ private fun GhostButton(label: String, modifier: Modifier = Modifier, onClick: (
             .background(Color.White.copy(alpha = 0.06f))
             .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 13.dp, horizontal = 18.dp),
+            .padding(vertical = 12.dp, horizontal = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(label, color = Nexo.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)

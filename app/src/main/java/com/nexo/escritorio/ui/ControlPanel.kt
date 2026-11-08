@@ -31,6 +31,9 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Screenshot
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.Icon
@@ -56,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import com.nexo.escritorio.AppEntry
 import com.nexo.escritorio.DesktopActions
 import com.nexo.escritorio.NexoPrefs
+import com.nexo.escritorio.NexoAccessibility
 import com.nexo.escritorio.NotifItem
 import com.nexo.escritorio.NotificationService
 import java.time.LocalDateTime
@@ -118,6 +122,18 @@ fun ControlPanel(
         },
         QuickTileSpec("Ajustes", "Del teléfono", Icons.Rounded.Settings, false) {
             openAndClose(Intent(AndroidSettings.ACTION_SETTINGS))
+        },
+        QuickTileSpec("Captura", "De la pantalla", Icons.Rounded.Screenshot, false) {
+            ui.closeAll()
+            if (!NexoAccessibility.screenshot()) actions.open(Intent(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS))
+        },
+        QuickTileSpec("Bloquear", "El teléfono", Icons.Rounded.Lock, false) {
+            ui.closeAll()
+            if (!NexoAccessibility.lock()) actions.open(Intent(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS))
+        },
+        QuickTileSpec("Touchpad", "Usa el teléfono", Icons.Rounded.TouchApp, false) {
+            ui.closeAll()
+            actions.touchpad()
         },
     )
 

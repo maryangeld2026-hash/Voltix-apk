@@ -237,6 +237,14 @@ private fun AllApps(
             items(pinned, key = { "pin_" + it.key }) { app -> StartTile(app, onOpen, onMenu) }
             item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(12.dp)) }
         }
+        val games = apps.filter { it.isGame }
+        if (games.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SectionLabel("Juegos · ${games.size}", Modifier.padding(start = 6.dp, bottom = 6.dp))
+            }
+            items(games, key = { "game_" + it.key }) { app -> StartTile(app, onOpen, onMenu) }
+            item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(12.dp)) }
+        }
         item(span = { GridItemSpan(maxLineSpan) }) {
             SectionLabel("Todas las aplicaciones · ${apps.size}", Modifier.padding(start = 6.dp, bottom = 6.dp))
         }
@@ -323,7 +331,7 @@ private fun SearchResults(
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(app.label, color = Nexo.text, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-                    Text("Aplicación", color = Nexo.textDim, fontSize = 12.sp)
+                    Text(if (app.isGame) "Juego" else "Aplicación", color = Nexo.textDim, fontSize = 12.sp)
                 }
                 if (first) KeyHint("Intro")
             }
@@ -415,7 +423,14 @@ private fun StartFooter(ui: DesktopUi, actions: DesktopActions) {
             ui.closeAll()
             actions.open(Intent(AndroidSettings.ACTION_SETTINGS))
         }
-        FooterButton(Icons.Rounded.Tune, "Ajustes de Nexo") { ui.openSettings() }
+        FooterButton(Icons.Rounded.Tune, "Ajustes de Nexo") {
+            if (ui.overlayActive) {
+                ui.closeAll()
+                actions.showDesktop(com.nexo.escritorio.DesktopActivity.ACTION_SETTINGS)
+            } else {
+                ui.openSettings()
+            }
+        }
         FooterButton(Icons.Rounded.PowerSettingsNew, "Salir del escritorio") { actions.exit() }
     }
 }

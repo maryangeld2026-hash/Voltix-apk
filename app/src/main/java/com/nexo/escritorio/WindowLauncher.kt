@@ -12,14 +12,16 @@ import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.Process
 import android.view.Display
 import android.widget.Toast
 import androidx.compose.runtime.mutableStateListOf
 import android.provider.Settings as AndroidSettings
 
-/** Cómo se abre una app en el monitor. */
-enum class WindowMode { DEFAULT, WINDOW, MAXIMIZED, LEFT, RIGHT }
+/** Cómo se abre una app. */
+enum class WindowMode { DEFAULT, WINDOW, MAXIMIZED, LEFT, RIGHT, FULLSCREEN }
 
 /**
  * Calcula el tamaño y la posición de las ventanas. Android dibuja las ventanas
@@ -31,16 +33,21 @@ object WindowLauncher {
     var reservedBottom = 0
     private var cascade = 0
 
-    /** Apps abiertas desde el escritorio en esta sesión (se muestran en la barra). */
+    /** Apps abiertas desde el escritorio en esta sesión (si el asistente no está activo). */
     val opened = mutableStateListOf<String>()
+
+    fun resolve(mode: WindowMode, isGame: Boolean): WindowMode = when {
+        mode != WindowMode.DEFAULT -> mode
+        isGame && NexoPrefs.gamesFullscreen -> WindowMode.FULLSCREEN
+        NexoPrefs.openMaximized -> WindowMode.MAXIMIZED
+        else -> WindowMode.WINDOW
+    }
 
     fun bounds(mode: WindowMode): Rect? {
         if (screenW <= 0 || screenH <= 0) return null
-        val m = if (mode == WindowMode.DEFAULT) {
-            if (NexoPrefs.openMaximized) WindowMode.MAXIMIZED else WindowMode.WINDOW
-        } else mode
         val usableH = (screenH - reservedBottom).coerceAtLeast(screenH / 2)
-        return when (m) {
+        return when (mode) {
+            WindowMode.FULLSCREEN -> null
             WindowMode.MAXIMIZED -> Rect(0, 0, screenW, usableH)
             WindowMode.LEFT -> Rect(0, 0, screenW / 2, usableH)
             WindowMode.RIGHT -> Rect(screenW / 2, 0, screenW, usableH)
@@ -56,10 +63,20 @@ object WindowLauncher {
         }
     }
 
-    fun options(displayId: Int, mode: WindowMode): ActivityOptions {
+    /**
+     * Opciones para abrir una app en [displayId]. Si [rich] es true se pide además el
+     * modo de ventana (libre o pantalla completa), que hace que las ventanas funcionen
+     * también en la pantalla del propio teléfono.
+     */
+    fun options(displayId: Int, mode: WindowMode, rich: Boolean = true): ActivityOptions {
         val o = ActivityOptions.makeBasic()
         o.setLaunchDisplayId(displayId)
-        bounds(mode)?.let { o.setLaunchBounds(it) }
+        if (mode == WindowMode.FULLSCREEN) {
+            if (rich) Hidden.setWindowingMode(o, Hidden.WINDOWING_MODE_FULLSCREEN)
+        } else {
+            if (rich) Hidden.setWindowingMode(o, Hidden.WINDOWING_MODE_FREEFORM)
+            bounds(mode)?.let { o.setLaunchBounds(it) }
+        }
         return o
     }
 
@@ -70,19 +87,30 @@ object WindowLauncher {
     }
 }
 
-/** Detecta el monitor y abre el escritorio en él. */
+/** Detecta pantallas y abre el escritorio en ellas. */
 object Displays {
+    /** Una pantalla donde tiene sentido abrir el escritorio (monitor, TV inalámbrica, scrcpy…). */
+    fun isDesktopCandidate(d: Display): Boolean {
+        if (d.displayId == Display.DEFAULT_DISPLAY) return false
+        if ((d.flags and Display.FLAG_PRIVATE) != 0) return false
+        if (d.state == Display.STATE_OFF) return false
+        val presentation = (d.flags and Display.FLAG_PRESENTATION) != 0
+        val name = d.name.orEmpty()
+        return presentation || name.contains("scrcpy", ignoreCase = true) || name.contains("nexo", ignoreCase = true)
+    }
+
     fun external(ctx: Context): Display? {
         val dm = ctx.getSystemService(DisplayManager::class.java) ?: return null
-        dm.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
-            .firstOrNull { it.displayId != Display.DEFAULT_DISPLAY }
-            ?.let { return it }
+        dm.displays.firstOrNull { isDesktopCandidate(it) }?.let { return it }
         return dm.displays.firstOrNull {
             it.displayId != Display.DEFAULT_DISPLAY &&
                 (it.flags and Display.FLAG_PRIVATE) == 0 &&
                 it.state != Display.STATE_OFF
         }
     }
+
+    fun byId(ctx: Context, id: Int): Display? =
+        ctx.getSystemService(DisplayManager::class.java)?.getDisplay(id)
 
     @Suppress("DEPRECATION")
     fun sizeOf(d: Display): Point {
@@ -91,46 +119,90 @@ object Displays {
         return p
     }
 
-    /** Abre el escritorio en el monitor. */
-    fun openDesktop(ctx: Context, display: Display): Boolean {
+    fun desktopIntent(ctx: Context, action: String? = null): Intent =
+        Intent(ctx, DesktopActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .apply { if (action != null) putExtra(DesktopActivity.EXTRA_ACTION, action) }
+
+    /** Abre (o trae al frente) el escritorio en una pantalla. */
+    fun openDesktop(ctx: Context, display: Display, action: String? = null): Boolean {
         DesktopActivity.current?.get()?.let { running ->
             if (running.currentDisplayId() != display.displayId) running.finish()
         }
-        val intent = Intent(ctx, DesktopActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val o = ActivityOptions.makeBasic()
         o.setLaunchDisplayId(display.displayId)
-        // En un monitor en modo ventanas, el escritorio debe ocupar toda la pantalla y
-        // no ser una ventana más. Se pide «pantalla completa»; si el teléfono no lo
-        // permite, se abre como una ventana del tamaño del monitor.
-        if (!requestFullscreen(o)) {
-            val size = sizeOf(display)
-            o.setLaunchBounds(Rect(0, 0, size.x, size.y))
+        if (display.displayId != Display.DEFAULT_DISPLAY) {
+            // En un monitor con ventanas, el escritorio ocupa toda la pantalla y no es una ventana más.
+            if (!Hidden.setWindowingMode(o, Hidden.WINDOWING_MODE_FULLSCREEN)) {
+                val size = sizeOf(display)
+                o.setLaunchBounds(Rect(0, 0, size.x, size.y))
+            }
+        } else {
+            Hidden.setWindowingMode(o, Hidden.WINDOWING_MODE_FULLSCREEN)
         }
         return try {
-            ctx.startActivity(intent, o.toBundle())
+            ctx.startActivity(desktopIntent(ctx, action), o.toBundle())
+            true
+        } catch (e: Exception) {
+            try {
+                val basic = ActivityOptions.makeBasic().setLaunchDisplayId(display.displayId)
+                ctx.startActivity(desktopIntent(ctx, action), basic.toBundle())
+                true
+            } catch (e2: Exception) {
+                false
+            }
+        }
+    }
+
+    /** Escritorio en la pantalla del propio teléfono (para duplicar en una TV). */
+    fun openDesktopHere(ctx: Context) {
+        val d = byId(ctx, Display.DEFAULT_DISPLAY)
+        if (d != null) openDesktop(ctx, d) else ctx.startActivity(desktopIntent(ctx))
+    }
+
+    /** Trae el escritorio que ya está abierto al frente, en su pantalla. */
+    fun bringDesktop(ctx: Context, action: String? = null): Boolean {
+        val running = DesktopActivity.current?.get() ?: return false
+        val d = byId(ctx, running.currentDisplayId()) ?: return false
+        return try {
+            val o = ActivityOptions.makeBasic().setLaunchDisplayId(d.displayId)
+            ctx.startActivity(desktopIntent(ctx, action), o.toBundle())
             true
         } catch (e: Exception) {
             false
         }
     }
+}
 
-    private const val WINDOWING_MODE_FULLSCREEN = 1
+/**
+ * Vigila cuando se conecta una pantalla (cable, inalámbrica o scrcpy) y abre el escritorio,
+ * también con la app cerrada si el asistente o las notificaciones de Nexo están activos.
+ */
+object DisplayWatcher {
+    private var started = false
+    private val handler = Handler(Looper.getMainLooper())
 
-    private fun requestFullscreen(o: ActivityOptions): Boolean = try {
-        ActivityOptions::class.java
-            .getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType)
-            .invoke(o, WINDOWING_MODE_FULLSCREEN)
-        true
-    } catch (e: Throwable) {
-        false
+    fun start(app: Context) {
+        if (started) return
+        started = true
+        val ctx = app.applicationContext
+        val dm = ctx.getSystemService(DisplayManager::class.java) ?: return
+        dm.registerDisplayListener(object : DisplayManager.DisplayListener {
+            override fun onDisplayAdded(displayId: Int) {
+                handler.postDelayed({ maybeOpen(ctx, displayId) }, 900)
+            }
+
+            override fun onDisplayRemoved(displayId: Int) {}
+            override fun onDisplayChanged(displayId: Int) {}
+        }, handler)
     }
 
-    /** Vista previa del escritorio en la pantalla del propio teléfono. */
-    fun openDesktopHere(ctx: Context) {
-        DesktopActivity.current?.get()?.let { running ->
-            if (running.currentDisplayId() != Display.DEFAULT_DISPLAY) running.finish()
-        }
-        ctx.startActivity(Intent(ctx, DesktopActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    private fun maybeOpen(ctx: Context, displayId: Int) {
+        if (!NexoPrefs.autoOpen) return
+        val d = Displays.byId(ctx, displayId) ?: return
+        if (!Displays.isDesktopCandidate(d)) return
+        if (DesktopActivity.current?.get()?.currentDisplayId() == displayId) return
+        runCatching { Displays.openDesktop(ctx, d) }
     }
 }
 
@@ -143,13 +215,27 @@ fun Activity.currentDisplayId(): Int =
     }
 
 /** Todo lo que el escritorio puede hacer: abrir apps, ajustes, notificaciones… */
-class DesktopActions(private val activity: Activity) {
-    private val displayId: Int get() = activity.currentDisplayId()
-    private val launcherApps: LauncherApps get() = activity.getSystemService(LauncherApps::class.java)
+class DesktopActions(private val ctx: Context, private val displayIdProvider: () -> Int) {
+    val displayId: Int get() = displayIdProvider()
+    private val launcherApps: LauncherApps get() = ctx.getSystemService(LauncherApps::class.java)
+
+    /** Se llama después de abrir algo (por ejemplo, para ocultar la barra con los juegos). */
+    var onLaunched: (WindowMode) -> Unit = {}
 
     fun launch(app: AppEntry, mode: WindowMode = WindowMode.DEFAULT, newInstance: Boolean = false) {
-        val opts = WindowLauncher.options(displayId, mode).toBundle()
-        try {
+        val resolved = WindowLauncher.resolve(mode, app.isGame)
+        val ok = tryLaunch(app, resolved, newInstance, rich = true) || tryLaunch(app, resolved, newInstance, rich = false)
+        if (ok) {
+            WindowLauncher.markOpened(app.key)
+            onLaunched(resolved)
+        } else {
+            toast("No se pudo abrir ${app.label}")
+        }
+    }
+
+    private fun tryLaunch(app: AppEntry, mode: WindowMode, newInstance: Boolean, rich: Boolean): Boolean {
+        val opts = WindowLauncher.options(displayId, mode, rich).toBundle()
+        return try {
             if (newInstance && app.user == Process.myUserHandle()) {
                 val i = Intent(Intent.ACTION_MAIN)
                     .addCategory(Intent.CATEGORY_LAUNCHER)
@@ -159,26 +245,30 @@ class DesktopActions(private val activity: Activity) {
                             Intent.FLAG_ACTIVITY_MULTIPLE_TASK or
                             Intent.FLAG_ACTIVITY_NEW_DOCUMENT
                     )
-                activity.startActivity(i, opts)
+                ctx.startActivity(i, opts)
             } else {
                 launcherApps.startMainActivity(app.component, app.user, null, opts)
             }
-            WindowLauncher.markOpened(app.key)
+            true
         } catch (e: Exception) {
-            toast("No se pudo abrir ${app.label}")
+            false
         }
     }
 
-    /** Abre cualquier pantalla (ajustes, archivos, web…) en una ventana del monitor. */
+    /** Abre cualquier pantalla (ajustes, archivos, web…) en una ventana. */
     fun open(intent: Intent, mode: WindowMode = WindowMode.WINDOW, quiet: Boolean = false): Boolean {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return try {
-            activity.startActivity(intent, WindowLauncher.options(displayId, mode).toBundle())
-            true
-        } catch (e: Exception) {
-            if (!quiet) toast("Esta opción no está disponible en tu teléfono")
-            false
+        for (rich in listOf(true, false)) {
+            try {
+                ctx.startActivity(intent, WindowLauncher.options(displayId, mode, rich).toBundle())
+                onLaunched(mode)
+                return true
+            } catch (e: Exception) {
+                // se intenta de nuevo sin opciones especiales
+            }
         }
+        if (!quiet) toast("Esta opción no está disponible en tu teléfono")
+        return false
     }
 
     fun appInfo(app: AppEntry) {
@@ -223,12 +313,12 @@ class DesktopActions(private val activity: Activity) {
 
     fun openNotification(n: NotifItem) {
         val pi = n.intent ?: return
-        val o = WindowLauncher.options(displayId, WindowMode.DEFAULT)
+        val o = WindowLauncher.options(displayId, WindowLauncher.resolve(WindowMode.DEFAULT, false))
         if (Build.VERSION.SDK_INT >= 34) {
             o.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
         }
         try {
-            pi.send(activity, 0, null, null, null, null, o.toBundle())
+            pi.send(ctx, 0, null, null, null, null, o.toBundle())
         } catch (e: PendingIntent.CanceledException) {
             toast("Esta notificación ya no se puede abrir")
         } catch (e: Exception) {
@@ -237,9 +327,30 @@ class DesktopActions(private val activity: Activity) {
         if (n.autoCancel) NotificationService.dismiss(n.key)
     }
 
-    fun exit() = activity.finish()
+    /** Trae el escritorio al frente (como «Mostrar escritorio» en Windows). */
+    fun showDesktop(action: String? = null) {
+        if (!Displays.bringDesktop(ctx, action)) {
+            DesktopActivity.current?.get()?.handleAction(action)
+        }
+    }
+
+    fun touchpad() {
+        try {
+            val o = ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY)
+            ctx.startActivity(
+                Intent(ctx, TouchpadActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                o.toBundle()
+            )
+        } catch (e: Exception) {
+            toast("No se pudo abrir el touchpad")
+        }
+    }
+
+    fun exit() {
+        DesktopActivity.current?.get()?.finish()
+    }
 
     fun toast(msg: String) {
-        Toast.makeText(activity, msg, Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
     }
 }

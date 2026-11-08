@@ -6,6 +6,8 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
+import android.net.ConnectivityManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -21,9 +23,10 @@ import com.nexo.escritorio.ui.NexoTheme
 import com.nexo.escritorio.ui.SetupScreen
 import com.nexo.escritorio.ui.SetupStatus
 import com.nexo.escritorio.ui.accentColor
+import java.net.Inet4Address
 import android.provider.Settings as AndroidSettings
 
-/** Pantalla del teléfono: estado del monitor y guía de configuración. */
+/** Pantalla del teléfono: formas de conexión, estado y guía de configuración. */
 class MainActivity : ComponentActivity() {
 
     private val refreshTick = mutableIntStateOf(0)
@@ -31,14 +34,16 @@ class MainActivity : ComponentActivity() {
     private lateinit var displayManager: DisplayManager
 
     private val displayListener = object : DisplayManager.DisplayListener {
-        override fun onDisplayAdded(displayId: Int) = refreshDisplay(autoOpen = true)
-        override fun onDisplayRemoved(displayId: Int) = refreshDisplay(autoOpen = false)
-        override fun onDisplayChanged(displayId: Int) = refreshDisplay(autoOpen = false)
+        override fun onDisplayAdded(displayId: Int) = refreshDisplay()
+        override fun onDisplayRemoved(displayId: Int) = refreshDisplay()
+        override fun onDisplayChanged(displayId: Int) = refreshDisplay()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // Si se abrió en otra pantalla (por ejemplo desde scrcpy en el PC), allí va el escritorio.
+        if (redirectIfOnOtherDisplay()) return
         displayManager = getSystemService(DisplayManager::class.java)
         setContent {
             NexoTheme(accentColor(NexoPrefs.accent)) {
@@ -51,14 +56,28 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        redirectIfOnOtherDisplay()
+    }
+
+    private fun redirectIfOnOtherDisplay(): Boolean {
+        val id = currentDisplayId()
+        if (id == Display.DEFAULT_DISPLAY) return false
+        Displays.byId(this, id)?.let { Displays.openDesktop(this, it) }
+        finish()
+        return true
+    }
+
     override fun onStart() {
         super.onStart()
+        if (!::displayManager.isInitialized) return
         displayManager.registerDisplayListener(displayListener, Handler(Looper.getMainLooper()))
-        refreshDisplay(autoOpen = false)
+        refreshDisplay()
     }
 
     override fun onStop() {
-        displayManager.unregisterDisplayListener(displayListener)
+        if (::displayManager.isInitialized) displayManager.unregisterDisplayListener(displayListener)
         super.onStop()
     }
 
@@ -67,16 +86,11 @@ class MainActivity : ComponentActivity() {
         refreshTick.intValue++
     }
 
-    private fun refreshDisplay(autoOpen: Boolean) {
-        val before = external.value
-        val now = Displays.external(this)
-        external.value = now
-        if (autoOpen && now != null && before == null && NexoPrefs.autoOpen) {
-            Displays.openDesktop(this, now)
-        }
+    private fun refreshDisplay() {
+        external.value = Displays.external(this)
     }
 
-    // ---- Acciones que usa la pantalla de configuración ----
+    // ---- Datos para la pantalla de configuración ----
 
     fun readStatus(): SetupStatus = SetupStatus(
         developerOptions = globalFlag(AndroidSettings.Global.DEVELOPMENT_SETTINGS_ENABLED),
@@ -86,6 +100,11 @@ class MainActivity : ComponentActivity() {
         notifications = NotificationService.isEnabled(this),
         canWriteSettings = checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) ==
             PackageManager.PERMISSION_GRANTED,
+        overlay = BarOverlay.canUse(this),
+        assistant = NexoAccessibility.isEnabled(this),
+        isXiaomi = Build.MANUFACTURER.equals("xiaomi", ignoreCase = true) ||
+            Build.BRAND.equals("redmi", ignoreCase = true) || Build.BRAND.equals("poco", ignoreCase = true),
+        phoneIp = phoneIp(),
     )
 
     /** true/false si se pudo leer; null si el teléfono no deja comprobarlo. */
@@ -95,20 +114,47 @@ class MainActivity : ComponentActivity() {
         null
     }
 
+    /** IP del teléfono en la red Wi‑Fi (para conectar scrcpy sin cable). */
+    private fun phoneIp(): String? = try {
+        val cm = getSystemService(ConnectivityManager::class.java)
+        cm.getLinkProperties(cm.activeNetwork)?.linkAddresses
+            ?.map { it.address }
+            ?.firstOrNull { it is Inet4Address && !it.isLoopbackAddress }
+            ?.hostAddress
+    } catch (e: Exception) {
+        null
+    }
+
+    // ---- Acciones ----
+
     fun openDesktopOnMonitor() {
         val d = external.value ?: Displays.external(this)
         if (d == null) {
-            toast("No hay ningún monitor conectado")
+            toast("No hay ninguna pantalla conectada")
             return
         }
-        if (!Displays.openDesktop(this, d)) toast("No se pudo abrir el escritorio en el monitor")
+        if (!Displays.openDesktop(this, d)) toast("No se pudo abrir el escritorio en esa pantalla")
     }
 
     fun previewHere() = Displays.openDesktopHere(this)
 
+    fun openTouchpad() {
+        startActivity(Intent(this, TouchpadActivity::class.java))
+    }
+
+    /** Busca TVs y adaptadores inalámbricos (Miracast / «Transmitir»). */
+    fun openCast() {
+        val candidates = listOf(
+            Intent(AndroidSettings.ACTION_CAST_SETTINGS),
+            Intent("android.settings.WIFI_DISPLAY_SETTINGS"),
+        )
+        for (i in candidates) if (tryStart(i)) return
+        toast("Abre los ajustes rápidos y toca «Transmitir» o «Duplicar pantalla»")
+    }
+
     fun openDeveloperOptions() {
         if (!tryStart(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))) {
-            toast("Primero activa las opciones de desarrollador (paso 1)")
+            toast("Primero activa las opciones de desarrollador")
         }
     }
 
@@ -118,6 +164,30 @@ class MainActivity : ComponentActivity() {
 
     fun openNotificationAccess() {
         tryStart(Intent(AndroidSettings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+    }
+
+    fun openOverlayPermission() {
+        val i = Intent(AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+        if (!tryStart(i)) tryStart(Intent(AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION))
+    }
+
+    fun openAccessibility() {
+        tryStart(Intent(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS))
+    }
+
+    /** Información de la app (allí está «Permitir ajustes restringidos» en Android 13+). */
+    fun openAppDetails() {
+        tryStart(Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+    }
+
+    /** Permisos extra de Xiaomi: «Mostrar ventanas emergentes en segundo plano». */
+    fun openXiaomiPermissions() {
+        val editor = Intent("miui.intent.action.APP_PERM_EDITOR").putExtra("extra_pkgname", packageName)
+        val withComponent = Intent(editor).setClassName(
+            "com.miui.securitycenter",
+            "com.miui.permcenter.permissions.PermissionsEditorActivity",
+        )
+        if (!tryStart(withComponent) && !tryStart(editor)) openAppDetails()
     }
 
     /** Con el permiso concedido por ADB, activa todo sin entrar en ajustes. */

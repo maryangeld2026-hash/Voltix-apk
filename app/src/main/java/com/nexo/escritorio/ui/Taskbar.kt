@@ -44,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,7 +64,6 @@ import androidx.compose.ui.window.PopupProperties
 import com.nexo.escritorio.AppEntry
 import com.nexo.escritorio.DesktopActions
 import com.nexo.escritorio.NexoPrefs
-import com.nexo.escritorio.WindowLauncher
 import java.time.LocalDateTime
 
 /** Barra de tareas flotante: inicio, apps ancladas y abiertas, y la bandeja del sistema. */
@@ -71,6 +71,7 @@ import java.time.LocalDateTime
 fun Taskbar(
     modifier: Modifier,
     byKey: Map<String, AppEntry>,
+    running: List<String>,
     ui: DesktopUi,
     actions: DesktopActions,
     now: LocalDateTime,
@@ -80,8 +81,7 @@ fun Taskbar(
     onAppMenu: (AppEntry, Offset) -> Unit,
 ) {
     val pins = NexoPrefs.taskbarPins
-    val opened = WindowLauncher.opened
-    val shown = (pins + opened.filterNot { it in pins }).mapNotNull { byKey[it] }
+    val shown = (pins + running.filterNot { it in pins }).mapNotNull { byKey[it] }
 
     BoxWithConstraints(
         modifier
@@ -90,7 +90,7 @@ fun Taskbar(
             .height(56.dp)
             .glass(RoundedCornerShape(18.dp), 28.dp, 0.82f)
     ) {
-        val centerMax = (maxWidth - 420.dp).coerceAtLeast(160.dp)
+        val centerMax = (maxWidth - 440.dp).coerceAtLeast(160.dp)
 
         Row(
             Modifier
@@ -114,7 +114,7 @@ fun Taskbar(
             shown.forEach { app ->
                 TaskbarApp(
                     app = app,
-                    isOpen = app.key in opened,
+                    isOpen = app.key in running,
                     onClick = {
                         ui.closeAll()
                         actions.launch(app)
@@ -173,7 +173,37 @@ fun Taskbar(
                     }
                 }
             }
+            ShowDesktopButton {
+                ui.closeAll()
+                actions.showDesktop()
+            }
         }
+    }
+}
+
+/** Franja al final de la barra: trae el escritorio al frente (como en Windows). */
+@Composable
+private fun ShowDesktopButton(onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    Box(
+        Modifier
+            .padding(start = 4.dp)
+            .width(10.dp)
+            .height(40.dp)
+            .clip(RoundedCornerShape(5.dp))
+            .background(if (hovered) Color.White.copy(alpha = 0.16f) else Color.Transparent)
+            .hoverable(source)
+            .clickable(interactionSource = source, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .width(1.dp)
+                .height(22.dp)
+                .background(Color.White.copy(alpha = 0.18f))
+        )
+        if (hovered) HoverTooltip("Mostrar escritorio")
     }
 }
 
@@ -303,9 +333,13 @@ private fun TrayButton(onClick: () -> Unit, content: @Composable RowScope.() -> 
     )
 }
 
+/** false en la barra superpuesta (allí las ventanitas emergentes no se pueden mostrar). */
+val LocalTooltips = compositionLocalOf { true }
+
 /** Etiqueta que aparece encima del elemento al pasar el ratón. */
 @Composable
 fun HoverTooltip(text: String) {
+    if (!LocalTooltips.current) return
     val density = LocalDensity.current
     val offsetY = with(density) { -46.dp.roundToPx() }
     Popup(

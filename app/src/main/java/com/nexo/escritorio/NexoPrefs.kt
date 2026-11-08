@@ -37,6 +37,12 @@ object NexoPrefs {
     var showDesktopIcons by mutableStateOf(true); private set
     var autoOpen by mutableStateOf(true); private set
     var customWallpaper by mutableStateOf<ImageBitmap?>(null); private set
+    var gamesFullscreen by mutableStateOf(true); private set
+    var phoneLandscape by mutableStateOf(true); private set
+    var floatingBar by mutableStateOf(true); private set
+    var globalWinKey by mutableStateOf(true); private set
+    /** Velocidad del puntero del touchpad (0.5 – 3.0). */
+    var pointerSpeed by mutableStateOf(1.6f); private set
 
     val taskbarPins = mutableStateListOf<String>()
     val desktopItems = mutableStateListOf<String>()
@@ -53,6 +59,11 @@ object NexoPrefs {
         clock24 = sp.getBoolean(K_24H, true)
         showDesktopIcons = sp.getBoolean(K_SHOW_ICONS, true)
         autoOpen = sp.getBoolean(K_AUTO, true)
+        gamesFullscreen = sp.getBoolean(K_GAMES, true)
+        phoneLandscape = sp.getBoolean(K_LAND, true)
+        floatingBar = sp.getBoolean(K_FLOAT, true)
+        globalWinKey = sp.getBoolean(K_WINKEY, true)
+        pointerSpeed = sp.getFloat(K_SPEED, 1.6f)
         loadList(K_PINS)?.let { taskbarPins.addAll(it) }
         loadList(K_DESK)?.let { desktopItems.addAll(it) }
     }
@@ -65,6 +76,12 @@ object NexoPrefs {
     fun changeClock24(v: Boolean) { clock24 = v; sp.edit().putBoolean(K_24H, v).apply() }
     fun changeShowDesktopIcons(v: Boolean) { showDesktopIcons = v; sp.edit().putBoolean(K_SHOW_ICONS, v).apply() }
     fun changeAutoOpen(v: Boolean) { autoOpen = v; sp.edit().putBoolean(K_AUTO, v).apply() }
+
+    fun changeGamesFullscreen(v: Boolean) { gamesFullscreen = v; sp.edit().putBoolean(K_GAMES, v).apply() }
+    fun changePhoneLandscape(v: Boolean) { phoneLandscape = v; sp.edit().putBoolean(K_LAND, v).apply() }
+    fun changeFloatingBar(v: Boolean) { floatingBar = v; sp.edit().putBoolean(K_FLOAT, v).apply() }
+    fun changeGlobalWinKey(v: Boolean) { globalWinKey = v; sp.edit().putBoolean(K_WINKEY, v).apply() }
+    fun changePointerSpeed(v: Float) { pointerSpeed = v; sp.edit().putFloat(K_SPEED, v).apply() }
 
     fun togglePin(key: String) {
         if (key in taskbarPins) taskbarPins.remove(key) else taskbarPins.add(key)
@@ -158,6 +175,11 @@ object NexoPrefs {
     private const val K_24H = "clock24"
     private const val K_SHOW_ICONS = "show_icons"
     private const val K_AUTO = "auto_open"
+    private const val K_GAMES = "games_fullscreen"
+    private const val K_LAND = "phone_landscape"
+    private const val K_FLOAT = "floating_bar"
+    private const val K_WINKEY = "global_win_key"
+    private const val K_SPEED = "pointer_speed"
     private const val K_PINS = "pins"
     private const val K_DESK = "desktop"
     private const val K_INIT = "defaults_done"
