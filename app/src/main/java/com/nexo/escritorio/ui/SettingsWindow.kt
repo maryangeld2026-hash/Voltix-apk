@@ -114,7 +114,7 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         WALLPAPERS.forEachIndexed { i, w ->
-                            WallThumb(w.name, NexoPrefs.wallpaper == i, onClick = { NexoPrefs.setWallpaper(i) }) {
+                            WallThumb(w.name, NexoPrefs.wallpaper == i, onClick = { NexoPrefs.changeWallpaper(i) }) {
                                 Wallpaper(i, null, animated = false, modifier = Modifier.fillMaxSize())
                             }
                         }
@@ -123,7 +123,7 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                             "Tu foto",
                             NexoPrefs.wallpaper == -1,
                             onClick = {
-                                if (custom != null && NexoPrefs.wallpaper != -1) NexoPrefs.setWallpaper(-1) else pickPhoto()
+                                if (custom != null && NexoPrefs.wallpaper != -1) NexoPrefs.changeWallpaper(-1) else pickPhoto()
                             },
                         ) {
                             if (custom != null) {
@@ -158,7 +158,7 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                         "Fondo animado",
                         "Las luces del fondo se mueven muy despacio",
                         NexoPrefs.animatedWallpaper,
-                    ) { NexoPrefs.setAnimated(it) }
+                    ) { NexoPrefs.changeAnimated(it) }
                 }
 
                 Section("Color de acento") {
@@ -171,7 +171,7 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                                     .clip(CircleShape)
                                     .background(color)
                                     .border(3.dp, if (selected) Color.White else Color.Transparent, CircleShape)
-                                    .clickable { NexoPrefs.setAccent(i) },
+                                    .clickable { NexoPrefs.changeAccent(i) },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (selected) {
@@ -188,7 +188,7 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                     Segmented(
                         listOf("En ventana", "Maximizadas"),
                         if (NexoPrefs.openMaximized) 1 else 0,
-                    ) { NexoPrefs.setOpenMaximized(it == 1) }
+                    ) { NexoPrefs.changeOpenMaximized(it == 1) }
                     Spacer(Modifier.height(10.dp))
                     Text(
                         "Consejo: haz clic derecho sobre cualquier app para abrirla en la mitad izquierda o derecha de la pantalla, o en una ventana nueva.",
@@ -200,12 +200,12 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                 Section("Escritorio") {
                     Text("Tamaño de los iconos", color = Nexo.textDim, fontSize = 13.sp)
                     Spacer(Modifier.height(10.dp))
-                    Segmented(listOf("Pequeños", "Normales", "Grandes"), NexoPrefs.iconSize) { NexoPrefs.setIconSize(it) }
+                    Segmented(listOf("Pequeños", "Normales", "Grandes"), NexoPrefs.iconSize) { NexoPrefs.changeIconSize(it) }
                     Spacer(Modifier.height(8.dp))
                     SwitchRow("Mostrar iconos en el escritorio", null, NexoPrefs.showDesktopIcons) {
-                        NexoPrefs.setShowDesktopIcons(it)
+                        NexoPrefs.changeShowDesktopIcons(it)
                     }
-                    SwitchRow("Reloj de 24 horas", null, NexoPrefs.clock24) { NexoPrefs.setClock24(it) }
+                    SwitchRow("Reloj de 24 horas", null, NexoPrefs.clock24) { NexoPrefs.changeClock24(it) }
                 }
 
                 Section("Atajos de teclado") {

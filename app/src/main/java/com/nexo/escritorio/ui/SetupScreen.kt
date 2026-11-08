@@ -233,7 +233,7 @@ private fun HeroCard(display: Display?, host: MainActivity) {
             "Abrir automáticamente al conectar",
             "Funciona mientras esta pantalla está abierta",
             NexoPrefs.autoOpen,
-        ) { NexoPrefs.setAutoOpen(it) }
+        ) { NexoPrefs.changeAutoOpen(it) }
     }
 }
 

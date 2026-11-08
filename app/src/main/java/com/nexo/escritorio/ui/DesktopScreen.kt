@@ -380,7 +380,7 @@ private fun desktopMenu(
         MenuAction(
             if (NexoPrefs.showDesktopIcons) "Ocultar iconos" else "Mostrar iconos",
             Icons.Rounded.GridView,
-        ) { NexoPrefs.setShowDesktopIcons(!NexoPrefs.showDesktopIcons) },
+        ) { NexoPrefs.changeShowDesktopIcons(!NexoPrefs.showDesktopIcons) },
         MenuDivider,
         MenuAction("Ajustes de pantalla", Icons.Rounded.Brightness6) {
             actions.open(Intent(AndroidSettings.ACTION_DISPLAY_SETTINGS))

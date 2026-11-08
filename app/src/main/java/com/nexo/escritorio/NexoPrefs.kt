@@ -57,14 +57,14 @@ object NexoPrefs {
         loadList(K_DESK)?.let { desktopItems.addAll(it) }
     }
 
-    fun setWallpaper(i: Int) { wallpaper = i; sp.edit().putInt(K_WALL, i).apply() }
-    fun setAnimated(v: Boolean) { animatedWallpaper = v; sp.edit().putBoolean(K_ANIM, v).apply() }
-    fun setAccent(i: Int) { accent = i; sp.edit().putInt(K_ACCENT, i).apply() }
-    fun setOpenMaximized(v: Boolean) { openMaximized = v; sp.edit().putBoolean(K_MAX, v).apply() }
-    fun setIconSize(v: Int) { iconSize = v; sp.edit().putInt(K_ICON, v).apply() }
-    fun setClock24(v: Boolean) { clock24 = v; sp.edit().putBoolean(K_24H, v).apply() }
-    fun setShowDesktopIcons(v: Boolean) { showDesktopIcons = v; sp.edit().putBoolean(K_SHOW_ICONS, v).apply() }
-    fun setAutoOpen(v: Boolean) { autoOpen = v; sp.edit().putBoolean(K_AUTO, v).apply() }
+    fun changeWallpaper(i: Int) { wallpaper = i; sp.edit().putInt(K_WALL, i).apply() }
+    fun changeAnimated(v: Boolean) { animatedWallpaper = v; sp.edit().putBoolean(K_ANIM, v).apply() }
+    fun changeAccent(i: Int) { accent = i; sp.edit().putInt(K_ACCENT, i).apply() }
+    fun changeOpenMaximized(v: Boolean) { openMaximized = v; sp.edit().putBoolean(K_MAX, v).apply() }
+    fun changeIconSize(v: Int) { iconSize = v; sp.edit().putInt(K_ICON, v).apply() }
+    fun changeClock24(v: Boolean) { clock24 = v; sp.edit().putBoolean(K_24H, v).apply() }
+    fun changeShowDesktopIcons(v: Boolean) { showDesktopIcons = v; sp.edit().putBoolean(K_SHOW_ICONS, v).apply() }
+    fun changeAutoOpen(v: Boolean) { autoOpen = v; sp.edit().putBoolean(K_AUTO, v).apply() }
 
     fun togglePin(key: String) {
         if (key in taskbarPins) taskbarPins.remove(key) else taskbarPins.add(key)
@@ -138,7 +138,7 @@ object NexoPrefs {
             }
         } ?: return false
         customWallpaper = bmp.asImageBitmap()
-        setWallpaper(-1)
+        changeWallpaper(-1)
         return true
     }
 
