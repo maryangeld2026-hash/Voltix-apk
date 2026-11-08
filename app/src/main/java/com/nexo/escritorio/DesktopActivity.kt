@@ -2,7 +2,10 @@ package com.nexo.escritorio
 
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.hardware.display.DisplayManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Display
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -29,10 +32,23 @@ class DesktopActivity : ComponentActivity() {
     val ui = DesktopUi()
     private lateinit var actions: DesktopActions
     private var overlay: BarOverlay? = null
+    private var homeDisplay = Display.DEFAULT_DISPLAY
+
+    // Si se desconecta la pantalla, el escritorio se cierra en lugar de pasarse al teléfono.
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayRemoved(displayId: Int) {
+            if (displayId == homeDisplay && homeDisplay != Display.DEFAULT_DISPLAY) finish()
+        }
+        override fun onDisplayAdded(displayId: Int) {}
+        override fun onDisplayChanged(displayId: Int) {}
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         current = WeakReference(this)
+        homeDisplay = currentDisplayId()
+        getSystemService(DisplayManager::class.java)
+            ?.registerDisplayListener(displayListener, Handler(Looper.getMainLooper()))
         actions = DesktopActions(this) { currentDisplayId() }
         actions.onLaunched = { mode ->
             // Con un juego a pantalla completa, la barra se esconde para no tapar nada.
@@ -112,6 +128,7 @@ class DesktopActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        runCatching { getSystemService(DisplayManager::class.java)?.unregisterDisplayListener(displayListener) }
         overlay?.detach()
         overlay = null
         if (current?.get() === this) current = null

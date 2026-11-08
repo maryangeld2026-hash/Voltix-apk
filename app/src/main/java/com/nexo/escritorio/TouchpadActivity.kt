@@ -24,6 +24,8 @@ import kotlin.math.hypot
 /** El teléfono se convierte en touchpad y teclado para el escritorio del monitor. */
 class TouchpadActivity : ComponentActivity() {
 
+    private val resumeTick = androidx.compose.runtime.mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -33,11 +35,17 @@ class TouchpadActivity : ComponentActivity() {
         setContent {
             NexoTheme(accentColor(NexoPrefs.accent)) {
                 TouchpadScreen(
+                    tick = resumeTick.intValue,
                     onEnableAssistant = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
                     onClose = { finish() },
                 )
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        resumeTick.intValue++
     }
 
     override fun onStop() {

@@ -396,7 +396,7 @@ fun BoxScope.ChromeLayer(
 
 /** Contenido de la barra superpuesta (encima de todas las apps). */
 @Composable
-fun BarChrome(actions: DesktopActions, ui: DesktopUi, expanded: Boolean, menuOffsetY: Float) {
+fun BarChrome(actions: DesktopActions, ui: DesktopUi, expanded: Boolean, menuOffsetY: () -> Float) {
     CompositionLocalProvider(LocalTooltips provides false) {
         BoxWithConstraints(
             Modifier
@@ -429,7 +429,7 @@ fun BarChrome(actions: DesktopActions, ui: DesktopUi, expanded: Boolean, menuOff
                 )
             } else {
                 ChromeLayer(actions, ui, maxW, maxH, expandedArea = expanded) { spec ->
-                    ui.overlayMenu = spec.copy(position = spec.position + Offset(0f, menuOffsetY))
+                    ui.overlayMenu = spec.copy(position = spec.position + Offset(0f, menuOffsetY()))
                 }
             }
             if (expanded) {

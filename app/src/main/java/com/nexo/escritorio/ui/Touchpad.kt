@@ -58,14 +58,14 @@ import com.nexo.escritorio.NexoPrefs
 import com.nexo.escritorio.TouchpadView
 
 @Composable
-fun TouchpadScreen(onEnableAssistant: () -> Unit, onClose: () -> Unit) {
+fun TouchpadScreen(tick: Int, onEnableAssistant: () -> Unit, onClose: () -> Unit) {
     val connected by NexoAccessibility.connected.collectAsState()
     val accent = LocalAccent.current
     var status by remember { mutableStateOf("") }
     var pointerOn by remember { mutableStateOf(false) }
 
     // Al abrir (o al activar el asistente) se muestra el puntero en el monitor.
-    LaunchedEffect(connected) {
+    LaunchedEffect(connected, tick) {
         val s = NexoAccessibility.get()
         if (connected && s != null) {
             val d = s.targetDisplay()

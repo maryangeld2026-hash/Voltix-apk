@@ -100,7 +100,7 @@ class BarOverlay(
                             actions = actions,
                             ui = ui,
                             expanded = expanded,
-                            menuOffsetY = if (expanded) 0f else (screenH - stripPx).toFloat(),
+                            menuOffsetY = { if (expanded) 0f else stripTop(stripPx) },
                         )
                     }
                 }
@@ -142,6 +142,14 @@ class BarOverlay(
     private val expandedFlags =
         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+
+    /** Posición real de la barra en la pantalla (sirve también si el teléfono gira). */
+    private fun stripTop(stripPx: Int): Float {
+        val v = view ?: return (screenH - stripPx).toFloat()
+        val loc = IntArray(2)
+        v.getLocationOnScreen(loc)
+        return loc[1].toFloat()
+    }
 
     private fun resize(open: Boolean, hidden: Boolean, density: Float, stripPx: Int) {
         val v = view ?: return
