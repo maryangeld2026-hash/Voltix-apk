@@ -20,7 +20,11 @@ jobs:
       - name: Compilar
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          set -o pipefail
+          ./gradlew assembleDebug --no-daemon 2>&1 | tee build.log || {
+            grep -E "^e: |error:|What went wrong|FAILURE|Could not|> " build.log | head -40 | while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          }
 
       - uses: actions/upload-artifact@v4
         with:
