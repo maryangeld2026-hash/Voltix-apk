@@ -165,9 +165,8 @@ object TaskControl {
         val s = service() ?: return false
         return runCatching {
             val m = s.javaClass.methods.firstOrNull { it.name == "resizeTask" } ?: return false
-            val args = m.parameterTypes.map { t ->
+            val args: MutableList<Any?> = m.parameterTypes.map { t ->
                 when (t) {
-                    Int::class.javaPrimitiveType -> null
                     Rect::class.java -> bounds
                     else -> null
                 }
