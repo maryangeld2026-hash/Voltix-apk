@@ -8,6 +8,8 @@ Convierte tu teléfono Android en un computador: conectas un monitor, teclado y 
 - **Barra de tareas siempre visible**, encima de las apps (como en Windows), con apps ancladas, apps abiertas de verdad, red, batería, hora, notificaciones y botón «Mostrar escritorio».
 - **Menú de inicio** con búsqueda instantánea, apps fijadas, **sección de juegos** y todas las apps.
 - **Ventanas**: cada app en una ventana que se mueve y redimensiona; clic derecho para maximizada, mitad izquierda/derecha, nueva ventana o **pantalla completa**. Funciona también en la pantalla del propio teléfono.
+- **Ventanas como en un PC (con Shizuku, sin root)**: botones de minimizar, maximizar y cerrar sobre cada ventana; clic en la barra para minimizar y restaurar; Win + ↑/↓/←/→; menú de ventana con clic derecho en la barra.
+- **Todo se adapta solo a la pantalla**: la interfaz se escala según el tamaño (más grande en TV, compacta en portátil o teléfono), las ventanas eligen un tamaño adecuado y se reacomodan si cambia la resolución; fondo e iconos en alta resolución.
 - **Juegos**: se detectan solos, se abren a pantalla completa y la barra se esconde mientras juegas. Los mandos funcionan directamente.
 - **Centro de control**: Wi‑Fi, Bluetooth, sonido, pantalla, batería, ajustes, captura de pantalla, bloqueo y touchpad, más tus notificaciones.
 - **Touchpad**: el teléfono mueve un puntero en el monitor, hace clic, desplaza y escribe.
@@ -64,6 +66,7 @@ adb shell pm grant com.nexo.escritorio android.permission.WRITE_SECURE_SETTINGS
 
 ## Permisos opcionales
 
+- **Shizuku** (app gratuita, sin root): controles de ventana completos. Ábrela, pulsa «Iniciar» con la depuración inalámbrica y en Nexo pulsa «Dar permiso a Nexo». Hay que volver a iniciarla tras reiniciar el teléfono.
 - **Mostrar sobre otras apps**: barra de tareas siempre visible.
 - **Accesibilidad (asistente de Nexo)**: apps abiertas reales en la barra, tecla Windows global, touchpad, captura y bloqueo. En Android 13+, si sale «Ajuste restringido»: Información de la app › ⋮ › «Permitir ajustes restringidos».
 - **Acceso a notificaciones**: notificaciones en el centro de control.
@@ -89,6 +92,8 @@ app/src/main/java/com/nexo/escritorio/
 ├── NexoAccessibility.kt     Asistente: apps abiertas, tecla Windows, puntero
 ├── TouchpadActivity.kt      Touchpad en el teléfono
 ├── Hidden.kt                Modos de ventana avanzados
+├── TaskControl.kt           Control de ventanas con Shizuku
+├── WindowControls.kt        Botones de ventana, minimizar/restaurar, reajuste automático
 ├── AppRepository.kt         Lista de apps instaladas
 ├── NexoPrefs.kt             Preferencias
 ├── NotificationService.kt   Notificaciones
