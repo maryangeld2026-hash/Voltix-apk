@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -85,6 +86,8 @@ class NexoAccessibility : AccessibilityService() {
         if (type == AccessibilityEvent.TYPE_WINDOWS_CHANGED || type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             handler.removeCallbacks(refreshRunnable)
             handler.postDelayed(refreshRunnable, 250)
+            // Los botones de ventana siguen a las ventanas al moverlas.
+            WindowControls.active?.requestRefresh()
         }
     }
 
@@ -293,6 +296,114 @@ class NexoAccessibility : AccessibilityService() {
             lineTo((cx + dx).coerceIn(0f, maxX), (cy + dy).coerceIn(0f, maxY))
         }
         dispatch(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 140)))
+    }
+
+    // ---------- Controles de ventana sin Shizuku ----------
+
+    /**
+     * Ventanas de apps en una pantalla, de delante hacia atrás (incluye el escritorio de Nexo).
+     * El id es estable por app para poder recordar si está maximizada.
+     */
+    fun appWindows(displayId: Int): List<TaskWin> {
+        val list = windowsByDisplay()[displayId].orEmpty()
+            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+            .sortedByDescending { it.layer }
+        val out = ArrayList<TaskWin>()
+        val seenPkgs = HashSet<String>()
+        for (w in list) {
+            val pkg = try { w.root?.packageName?.toString() } catch (e: Exception) { null } ?: continue
+            if (!seenPkgs.add(pkg)) continue
+            val r = Rect()
+            w.getBoundsInScreen(r)
+            out += TaskWin(
+                taskId = pkg.hashCode(),
+                displayId = displayId,
+                pkg = pkg,
+                bounds = r,
+                windowingMode = 0,
+                visible = true,
+                viaShizuku = false,
+            )
+        }
+        return out
+    }
+
+    enum class CaptionButton { CLOSE, MAXIMIZE, MINIMIZE }
+
+    private fun idMatches(id: String, kind: CaptionButton): Boolean {
+        val n = id.substringAfter(":id/").lowercase()
+        return when (kind) {
+            CaptionButton.CLOSE -> n == "close_window" || n == "caption_close" || n.endsWith("close_button") && n.contains("caption")
+            CaptionButton.MAXIMIZE -> n == "maximize_window" || n == "caption_maximize" || n.contains("maximize")
+            CaptionButton.MINIMIZE -> n == "minimize_window" || n == "caption_minimize" || n.contains("minimize")
+        }
+    }
+
+    /**
+     * Pulsa el botón de la barra de título que dibuja Android (cerrar, maximizar, minimizar)
+     * de la ventana que ocupa [bounds]. Devuelve false si esa ventana no tiene ese botón.
+     */
+    fun clickCaptionButton(displayId: Int, bounds: Rect, kind: CaptionButton): Boolean {
+        val density = resources.displayMetrics.density
+        val top = Rect(bounds.left, bounds.top - (48 * density).toInt(), bounds.right, bounds.top + (56 * density).toInt())
+        for (w in windowsByDisplay()[displayId].orEmpty()) {
+            val root = try { w.root } catch (e: Exception) { null } ?: continue
+            val queue = ArrayDeque<AccessibilityNodeInfo>()
+            queue.add(root)
+            var visited = 0
+            while (queue.isNotEmpty() && visited < 600) {
+                val n = queue.removeFirst()
+                visited++
+                val id = n.viewIdResourceName
+                if (id != null && idMatches(id, kind)) {
+                    val r = Rect()
+                    n.getBoundsInScreen(r)
+                    if (Rect.intersects(r, top)) {
+                        var target: AccessibilityNodeInfo? = n
+                        while (target != null && !target.isClickable) target = target.parent
+                        if ((target ?: n).performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+                    }
+                }
+                for (i in 0 until n.childCount) n.getChild(i)?.let { queue.add(it) }
+            }
+        }
+        return false
+    }
+
+    /** Arrastra como un dedo de (x1,y1) a (x2,y2) en una pantalla. */
+    fun drag(displayId: Int, x1: Float, y1: Float, x2: Float, y2: Float, done: () -> Unit = {}) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) { done(); return }
+        val path = Path().apply {
+            moveTo(x1, y1)
+            lineTo(x2, y2)
+        }
+        val builder = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 450))
+            .setDisplayId(displayId)
+        val ok = runCatching {
+            dispatchGesture(builder.build(), object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) { handler.postDelayed(done, 150) }
+                override fun onCancelled(gestureDescription: GestureDescription?) { handler.postDelayed(done, 150) }
+            }, handler)
+        }.getOrDefault(false)
+        if (!ok) done()
+    }
+
+    /**
+     * Mueve y redimensiona una ventana arrastrando su barra de título y su esquina,
+     * igual que lo haría una persona con el ratón.
+     */
+    fun moveResize(displayId: Int, from: Rect, to: Rect, done: () -> Unit = {}) {
+        val density = resources.displayMetrics.density
+        val grabX = from.left + from.width() * 0.4f
+        val grabY = from.top + 14 * density
+        val dx = (to.left - from.left).toFloat()
+        val dy = (to.top - from.top).toFloat()
+        drag(displayId, grabX, grabY, grabX + dx, grabY + dy) {
+            val cornerX = to.left + from.width() - 3f
+            val cornerY = to.top + from.height() - 3f
+            drag(displayId, cornerX, cornerY, to.right - 3f, to.bottom - 3f, done)
+        }
     }
 
     // ---------- Escribir desde el teléfono ----------

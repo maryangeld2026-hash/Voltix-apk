@@ -340,7 +340,10 @@ fun BoxScope.ChromeLayer(
     // Con Shizuku: ventanas reales, minimizar y restaurar desde la barra.
     val wins by WindowControls.state.collectAsState()
     val shizuku by TaskControl.ready.collectAsState()
-    val managed = shizuku && WindowControls.active != null
+    val assistant by NexoAccessibility.connected.collectAsState()
+    // Controles de ventana con Shizuku o, si no está, con el asistente de Nexo.
+    val managed = WindowControls.active != null &&
+        (shizuku || (assistant && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R))
     val running = if (managed) wins.all.mapNotNull { t -> t.pkg?.let { byPkg[it]?.key } }.distinct() else basicRunning
     val minimizedKeys = if (managed) wins.minimized.mapNotNull { t -> t.pkg?.let { byPkg[it]?.key } } else emptyList()
     val appMenu: (AppEntry, Offset) -> Unit = { app, pos ->

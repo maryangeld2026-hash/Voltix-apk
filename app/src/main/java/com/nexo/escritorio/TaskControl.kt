@@ -20,6 +20,8 @@ data class TaskWin(
     val bounds: Rect?,
     val windowingMode: Int,
     val visible: Boolean,
+    /** true si viene de Shizuku; false si viene del asistente (accesibilidad). */
+    val viaShizuku: Boolean = true,
 )
 
 /**

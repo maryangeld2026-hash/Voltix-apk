@@ -350,21 +350,32 @@ private fun WindowControlsCard(status: SetupStatus, host: MainActivity) {
                 )
             }
         }
+        val assistOk = status.assistant && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R
         Spacer(Modifier.height(8.dp))
         StatusLine(
+            status.shizukuReady || assistOk,
             when {
-                status.shizukuReady -> true
-                else -> false
-            },
-            when {
-                status.shizukuReady -> "Activo"
-                status.shizukuRunning -> "Shizuku en marcha: falta dar permiso a Nexo"
-                status.shizukuInstalled -> "Shizuku instalado: falta iniciarlo"
-                else -> "Necesita la app gratuita Shizuku (sin root)"
+                status.shizukuReady -> "Activo con Shizuku (modo más rápido)"
+                assistOk -> "Activo con el asistente de Nexo"
+                else -> "Elige una de las dos opciones de abajo"
             },
         )
         if (!status.shizukuReady) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
+            Text("Opción 1 · Asistente de Nexo (sin instalar nada)", color = Nexo.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Activa «Nexo Escritorio» en Accesibilidad. Usa los botones de Android y mueve las ventanas por ti. " +
+                    "Es un poco más lento y se nota el movimiento. Necesita Android 11 o superior.",
+                color = Nexo.textDim,
+                fontSize = 13.sp,
+            )
+            if (!assistOk) {
+                Spacer(Modifier.height(8.dp))
+                PrimaryButton("Activar el asistente") { host.openAccessibility() }
+            }
+            Spacer(Modifier.height(14.dp))
+            Text("Opción 2 · Shizuku (más rápido y preciso)", color = Nexo.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
             MiniStep(1, "Instala Shizuku desde la tienda (gratis, sin root).")
             MiniStep(2, "Abre Shizuku y pulsa «Iniciar» en «Iniciar mediante depuración inalámbrica» (Android 11+, con Wi‑Fi). Se empareja una sola vez.")
             MiniStep(3, "Vuelve aquí y pulsa «Dar permiso a Nexo».")
@@ -376,7 +387,7 @@ private fun WindowControlsCard(status: SetupStatus, host: MainActivity) {
             Note("Con un PC también puedes iniciarlo por cable con este comando:")
             Spacer(Modifier.height(6.dp))
             CodeBlock(SHIZUKU_ADB) { host.copy(SHIZUKU_ADB) }
-            Note("Shizuku se detiene al reiniciar el teléfono: ábrelo y pulsa «Iniciar» otra vez. Sin Shizuku, las ventanas usan los botones propios de Android.")
+            Note("Shizuku se detiene al reiniciar el teléfono: ábrelo y pulsa «Iniciar» otra vez. Si tienes las dos opciones, Nexo usa Shizuku. Sin ninguna, quedan los botones propios de Android en cada ventana.")
         }
     }
 }

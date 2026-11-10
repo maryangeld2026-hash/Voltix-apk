@@ -218,7 +218,7 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                     ) { NexoPrefs.changeAutoFit(it) }
                     SwitchRow(
                         "Botones de minimizar, maximizar y cerrar en las ventanas",
-                        "Necesita Shizuku (ver la app en el teléfono)",
+                        "Con el asistente de Nexo o con Shizuku (ver la app en el teléfono)",
                         NexoPrefs.windowButtons,
                     ) { NexoPrefs.changeWindowButtons(it) }
                 }
@@ -273,8 +273,8 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                     Shortcut("Win + I", "Ajustes de Nexo")
                     Shortcut("Win + D", "Mostrar el escritorio")
                     Shortcut("Win + T", "Touchpad en el teléfono")
-                    Shortcut("Win + ↑ / ↓", "Maximizar / minimizar la ventana (con Shizuku)")
-                    Shortcut("Win + ← / →", "Ajustar la ventana a un lado (con Shizuku)")
+                    Shortcut("Win + ↑ / ↓", "Maximizar / minimizar la ventana")
+                    Shortcut("Win + ← / →", "Ajustar la ventana a un lado")
                     Shortcut("Clic derecho / Esc dentro de una app", "Volver atrás")
                     Shortcut("Ctrl + Esc", "Inicio (si tu teclado no tiene tecla Windows)")
                     Shortcut("Esc", "Cerrar menús")

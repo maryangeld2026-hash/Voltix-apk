@@ -36,7 +36,9 @@ data class DesktopWindows(
 private enum class Placement { FREE, MAX, LEFT, RIGHT }
 
 /**
- * Gestor de ventanas del escritorio (necesita Shizuku):
+ * Gestor de ventanas del escritorio. Elige solo el mejor modo disponible:
+ * 1) Shizuku (más rápido y preciso), 2) el asistente de Nexo (accesibilidad), 3) nada extra
+ *    (entonces quedan los botones que dibuja Android en cada ventana).
  * - Botones de minimizar, maximizar y cerrar sobre cada ventana.
  * - Minimizar y restaurar desde la barra de tareas, como en Windows.
  * - Reacomoda todas las ventanas automáticamente si cambia el tamaño de la pantalla.
@@ -73,6 +75,11 @@ class WindowControls(
     private val placement = HashMap<Int, Placement>()
     private val restoreBounds = HashMap<Int, Rect>()
     private val seen = HashSet<Int>()
+    /** Apps minimizadas en modo asistente (Android las oculta detrás del escritorio). */
+    private val minimizedPkgs = LinkedHashSet<String>()
+
+    private fun assistAvailable(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && NexoAccessibility.get() != null
 
     private class PillHolder(val view: PillView, val lp: WindowManager.LayoutParams, var shown: Boolean)
 
@@ -114,17 +121,27 @@ class WindowControls(
         override fun run() {
             if (!running) return
             val d = display
-            if (TaskControl.ready.value && d != null) {
-                val all = TaskControl.tasks().filter { it.displayId == d.displayId }
-                main.post { onTasks(all) }
-            } else {
-                main.post {
+            val shizuku = TaskControl.ready.value
+            val assist = !shizuku && assistAvailable()
+            when {
+                d == null -> {}
+                shizuku -> {
+                    val all = TaskControl.tasks().filter { it.displayId == d.displayId }
+                    main.post { onTasks(all) }
+                }
+                assist -> main.post { onAssistWindows(d) }
+                else -> main.post {
                     _state.value = DesktopWindows()
                     removeAllPills()
                 }
             }
-            worker.postDelayed(this, if (TaskControl.ready.value) 300 else 2000)
+            worker.postDelayed(this, if (shizuku) 300 else if (assist) 500 else 2000)
         }
+    }
+
+    /** Pide una actualización (por ejemplo, cuando el asistente ve que una ventana se movió). */
+    fun requestRefresh() {
+        if (running) pollSoon()
     }
 
     /** Pide una actualización inmediata (tras una acción). */
@@ -147,6 +164,30 @@ class WindowControls(
             visible = others.filter { it.taskId in above }
             minimized = others.filter { it.taskId !in above }
         }
+        publish(visible, minimized)
+    }
+
+    /** Modo asistente: las ventanas vienen del servicio de accesibilidad. */
+    private fun onAssistWindows(d: Display) {
+        val s = NexoAccessibility.get() ?: return
+        val all = s.appWindows(d.displayId)
+        val own = ctx.packageName
+        val idx = all.indexOfFirst { it.pkg == own }
+        val above = (if (idx < 0) all else all.subList(0, idx)).filter { it.pkg != own }
+        val below = if (idx < 0) emptyList() else all.subList(idx + 1, all.size).filter { it.pkg != own }
+        // Una app que vuelve a estar delante ya no está minimizada; las de detrás sí lo están.
+        above.forEach { t -> t.pkg?.let { minimizedPkgs.remove(it) } }
+        below.forEach { t -> t.pkg?.let { minimizedPkgs.add(it) } }
+        val installed = AppRepository.apps.value.map { it.packageName }.toSet()
+        minimizedPkgs.retainAll(installed)
+        val minimized = minimizedPkgs.map { pkg ->
+            TaskWin(pkg.hashCode(), d.displayId, pkg, null, 0, false, viaShizuku = false)
+        }
+        publish(above, minimized)
+    }
+
+    private fun publish(visible: List<TaskWin>, minimized: List<TaskWin>) {
+        val others = visible + minimized
         // Recordar cómo se abrió cada ventana nueva
         val now = SystemClock.uptimeMillis()
         for (t in others) {
@@ -187,7 +228,71 @@ class WindowControls(
         }
     }
 
+    private val displayId: Int get() = display?.displayId ?: 0
+
+    /** Trae al frente la ventana de una app (abriéndola por su icono; no se reinicia). */
+    private fun bringPkg(pkg: String) {
+        val app = AppRepository.apps.value.firstOrNull { it.packageName == pkg } ?: return
+        runCatching {
+            val o = android.app.ActivityOptions.makeBasic().setLaunchDisplayId(displayId)
+            ctx.getSystemService(android.content.pm.LauncherApps::class.java)
+                .startMainActivity(app.component, app.user, null, o.toBundle())
+        }
+    }
+
+    private fun assistMinimize(t: TaskWin) {
+        val s = NexoAccessibility.get() ?: return
+        val pkg = t.pkg ?: return
+        val b = t.bounds
+        // 1) El botón de minimizar de Android, si la ventana lo tiene (Android 15+).
+        if (b != null && s.clickCaptionButton(displayId, b, NexoAccessibility.CaptionButton.MINIMIZE)) {
+            minimizedPkgs.add(pkg)
+            pollSoon()
+            return
+        }
+        // 2) Escritorio al frente y las demás ventanas otra vez delante, en su orden.
+        val others = _state.value.visible.filter { it.pkg != pkg }.mapNotNull { it.pkg }
+        minimizedPkgs.add(pkg)
+        Displays.bringDesktop(ctx)
+        others.asReversed().forEachIndexed { i, o -> main.postDelayed({ bringPkg(o) }, 200L * (i + 1)) }
+        main.postDelayed({ pollSoon() }, 200L * (others.size + 1))
+    }
+
+    private fun assistClose(t: TaskWin) {
+        val s = NexoAccessibility.get() ?: return
+        val pkg = t.pkg ?: return
+        val b = t.bounds
+        if (b != null && s.clickCaptionButton(displayId, b, NexoAccessibility.CaptionButton.CLOSE)) {
+            pollSoon()
+            return
+        }
+        // Sin botón de cerrar: la app pasa al frente y se pulsa «Atrás» hasta que se cierre.
+        bringPkg(pkg)
+        fun press(n: Int) {
+            if (n == 0) { pollSoon(); return }
+            main.postDelayed({
+                val still = NexoAccessibility.get()?.appWindows(displayId)?.any { it.pkg == pkg } == true
+                if (still) {
+                    NexoAccessibility.back()
+                    press(n - 1)
+                } else {
+                    minimizedPkgs.remove(pkg)
+                    pollSoon()
+                }
+            }, 350)
+        }
+        press(4)
+    }
+
+    /** Coloca una ventana en [target] con gestos de arrastre (modo asistente). */
+    private fun assistPlace(t: TaskWin, target: Rect) {
+        val s = NexoAccessibility.get() ?: return
+        val b = t.bounds ?: return
+        s.moveResize(displayId, b, target) { pollSoon() }
+    }
+
     fun minimize(t: TaskWin) {
+        if (!t.viaShizuku) { assistMinimize(t); return }
         val visible = _state.value.visible.filter { it.taskId != t.taskId }
         bg {
             TaskControl.toFront(ctx, desktopTaskId())
@@ -196,7 +301,14 @@ class WindowControls(
         }
     }
 
-    fun restore(t: TaskWin) = bg { TaskControl.toFront(ctx, t.taskId) }
+    fun restore(t: TaskWin) {
+        if (!t.viaShizuku) {
+            t.pkg?.let { minimizedPkgs.remove(it); bringPkg(it) }
+            main.postDelayed({ pollSoon() }, 250)
+            return
+        }
+        bg { TaskControl.toFront(ctx, t.taskId) }
+    }
 
     /** Clic en la barra de tareas: restaurar, traer al frente o minimizar (como en Windows). */
     fun activate(t: TaskWin) {
@@ -209,6 +321,26 @@ class WindowControls(
     }
 
     fun toggleMaximize(t: TaskWin) {
+        if (!t.viaShizuku) {
+            val b = t.bounds ?: return
+            val s = NexoAccessibility.get() ?: return
+            val wasMax = placement[t.taskId] == Placement.MAX
+            // Primero el botón de maximizar de Android; si no hay, se arrastra la ventana.
+            if (s.clickCaptionButton(displayId, b, NexoAccessibility.CaptionButton.MAXIMIZE)) {
+                placement[t.taskId] = if (wasMax) Placement.FREE else Placement.MAX
+                pollSoon()
+                return
+            }
+            if (wasMax) {
+                placement[t.taskId] = Placement.FREE
+                assistPlace(t, restoreBounds.remove(t.taskId) ?: WindowLauncher.bounds(WindowMode.WINDOW) ?: return)
+            } else {
+                restoreBounds[t.taskId] = Rect(b)
+                placement[t.taskId] = Placement.MAX
+                assistPlace(t, usable())
+            }
+            return
+        }
         if (placement[t.taskId] == Placement.MAX) {
             val back = restoreBounds.remove(t.taskId) ?: WindowLauncher.bounds(WindowMode.WINDOW) ?: return
             placement[t.taskId] = Placement.FREE
@@ -226,10 +358,14 @@ class WindowControls(
         placement[t.taskId] = if (left) Placement.LEFT else Placement.RIGHT
         val u = usable()
         val r = if (left) Rect(0, 0, u.width() / 2, u.bottom) else Rect(u.width() / 2, 0, u.right, u.bottom)
+        if (!t.viaShizuku) { assistPlace(t, r); return }
         bg { TaskControl.resize(t.taskId, r); TaskControl.toFront(ctx, t.taskId) }
     }
 
-    fun close(t: TaskWin) = bg { TaskControl.close(t.taskId) }
+    fun close(t: TaskWin) {
+        if (!t.viaShizuku) { assistClose(t); return }
+        bg { TaskControl.close(t.taskId) }
+    }
 
     /** La ventana de delante (para los atajos de teclado). */
     fun top(): TaskWin? = _state.value.visible.firstOrNull()
@@ -245,6 +381,26 @@ class WindowControls(
         val sx = newW.toFloat() / oldW
         val sy = newH.toFloat() / oldH
         val list = _state.value.all
+        if (list.any { !it.viaShizuku }) {
+            // Modo asistente: se recolocan una a una las ventanas maximizadas o ajustadas.
+            val jobs = list.filter { !it.viaShizuku && it.bounds != null }.mapNotNull { t ->
+                val r = when (placement[t.taskId]) {
+                    Placement.MAX -> Rect(0, 0, newW, usableH)
+                    Placement.LEFT -> Rect(0, 0, newW / 2, usableH)
+                    Placement.RIGHT -> Rect(newW / 2, 0, newW, usableH)
+                    else -> null
+                }
+                r?.let { t to it }
+            }
+            fun next(i: Int) {
+                if (i >= jobs.size) { pollSoon(); return }
+                val (t, r) = jobs[i]
+                val s = NexoAccessibility.get() ?: return
+                s.moveResize(displayId, t.bounds!!, r) { next(i + 1) }
+            }
+            next(0)
+            return
+        }
         bg {
             for (t in list) {
                 val b = t.bounds ?: continue
