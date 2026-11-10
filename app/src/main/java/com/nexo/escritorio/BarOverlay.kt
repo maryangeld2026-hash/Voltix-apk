@@ -24,6 +24,7 @@ import com.nexo.escritorio.ui.BarChrome
 import com.nexo.escritorio.ui.DesktopUi
 import com.nexo.escritorio.ui.NexoTheme
 import com.nexo.escritorio.ui.TASKBAR_RESERVE_DP
+import com.nexo.escritorio.ui.UiScale
 import com.nexo.escritorio.ui.accentColor
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -87,7 +88,9 @@ class BarOverlay(
                 displayCtx
             }
             val manager = windowCtx.getSystemService(WindowManager::class.java)
-            val density = windowCtx.resources.displayMetrics.density
+            // La barra usa la misma escala automática que el escritorio.
+            val scale = UiScale.forDisplay(ctx, display)
+            val density = windowCtx.resources.displayMetrics.density * scale
             screenH = Displays.sizeOf(display).y
             val stripPx = (TASKBAR_RESERVE_DP * density).toInt()
 
@@ -100,6 +103,7 @@ class BarOverlay(
                             actions = actions,
                             ui = ui,
                             expanded = expanded,
+                            scale = scale,
                             menuOffsetY = { if (expanded) 0f else stripTop(stripPx) },
                         )
                     }

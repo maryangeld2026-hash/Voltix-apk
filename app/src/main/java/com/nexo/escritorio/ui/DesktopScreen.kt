@@ -47,6 +47,8 @@ import androidx.compose.material.icons.rounded.DesktopWindows
 import androidx.compose.material.icons.rounded.FilterNone
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.CropFree
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Minimize
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Info
@@ -94,6 +96,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nexo.escritorio.AppEntry
@@ -101,6 +104,9 @@ import com.nexo.escritorio.AppRepository
 import com.nexo.escritorio.DesktopActions
 import com.nexo.escritorio.NexoPrefs
 import com.nexo.escritorio.NexoAccessibility
+import com.nexo.escritorio.TaskControl
+import com.nexo.escritorio.TaskWin
+import com.nexo.escritorio.WindowControls
 import com.nexo.escritorio.NotificationService
 import com.nexo.escritorio.WindowLauncher
 import com.nexo.escritorio.WindowMode
@@ -171,7 +177,6 @@ fun DesktopRoot(actions: DesktopActions, ui: DesktopUi) {
     val windowInfo = LocalWindowInfo.current
     val metaCombo = remember { booleanArrayOf(false) }
 
-    LaunchedEffect(Unit) { NexoPrefs.loadCustomWallpaper() }
     LaunchedEffect(windowInfo.isWindowFocused, ui.startOpen) {
         if (windowInfo.isWindowFocused && !ui.startOpen) runCatching { focus.requestFocus() }
     }
@@ -228,13 +233,23 @@ fun DesktopRoot(actions: DesktopActions, ui: DesktopUi) {
     }
 
     NexoTheme(accent) {
+      // Escala automática: la interfaz se adapta al tamaño de la TV, el portátil o el teléfono.
+      BoxWithConstraints(Modifier.fillMaxSize()) {
+        val pxW = constraints.maxWidth
+        val pxH = constraints.maxHeight
+        val scale = UiScale.auto(pxW, pxH, density.density, actions.displayId == android.view.Display.DEFAULT_DISPLAY)
+        val scaled = Density(density.density * scale, density.fontScale)
+        // El fondo personalizado se carga a la resolución exacta de esta pantalla.
+        LaunchedEffect(pxW, pxH) { NexoPrefs.loadCustomWallpaper(pxW, pxH) }
+        CompositionLocalProvider(LocalDensity provides scaled) {
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
                 .onSizeChanged {
                     WindowLauncher.screenW = it.width
                     WindowLauncher.screenH = it.height
-                    WindowLauncher.reservedBottom = with(density) { TASKBAR_RESERVE_DP.dp.roundToPx() }
+                    WindowLauncher.density = scaled.density
+                    WindowLauncher.reservedBottom = with(scaled) { TASKBAR_RESERVE_DP.dp.roundToPx() }
                 }
                 .onPreviewKeyEvent { onKey(it) }
                 .focusRequester(focus)
@@ -284,6 +299,8 @@ fun DesktopRoot(actions: DesktopActions, ui: DesktopUi) {
 
             ContextMenuHost(ui.menu) { ui.menu = null }
         }
+        }
+      }
     }
 }
 
@@ -319,8 +336,21 @@ fun BoxScope.ChromeLayer(
     val now by rememberNow()
     val battery = rememberBattery()
     val net = rememberNetwork()
-    val running = rememberRunning(actions.displayId, byPkg)
-    val appMenu: (AppEntry, Offset) -> Unit = { app, pos -> showMenu(buildAppMenu(app, pos, actions, ui)) }
+    val basicRunning = rememberRunning(actions.displayId, byPkg)
+    // Con Shizuku: ventanas reales, minimizar y restaurar desde la barra.
+    val wins by WindowControls.state.collectAsState()
+    val shizuku by TaskControl.ready.collectAsState()
+    val managed = shizuku && WindowControls.active != null
+    val running = if (managed) wins.all.mapNotNull { t -> t.pkg?.let { byPkg[it]?.key } }.distinct() else basicRunning
+    val minimizedKeys = if (managed) wins.minimized.mapNotNull { t -> t.pkg?.let { byPkg[it]?.key } } else emptyList()
+    val appMenu: (AppEntry, Offset) -> Unit = { app, pos ->
+        showMenu(buildAppMenu(app, pos, actions, ui, if (managed) wins.forPackage(app.packageName) else null))
+    }
+    val activate: (AppEntry) -> Unit = { app ->
+        val t = if (managed) wins.forPackage(app.packageName) else null
+        val c = WindowControls.active
+        if (t != null && c != null) c.activate(t) else actions.launch(app)
+    }
 
     if (expandedArea) {
         // Un clic fuera del menú de inicio o del panel los cierra
@@ -384,6 +414,8 @@ fun BoxScope.ChromeLayer(
         modifier = Modifier.align(Alignment.BottomCenter),
         byKey = byKey,
         running = running,
+        minimized = minimizedKeys,
+        onActivate = activate,
         ui = ui,
         actions = actions,
         now = now,
@@ -396,8 +428,12 @@ fun BoxScope.ChromeLayer(
 
 /** Contenido de la barra superpuesta (encima de todas las apps). */
 @Composable
-fun BarChrome(actions: DesktopActions, ui: DesktopUi, expanded: Boolean, menuOffsetY: () -> Float) {
-    CompositionLocalProvider(LocalTooltips provides false) {
+fun BarChrome(actions: DesktopActions, ui: DesktopUi, expanded: Boolean, scale: Float, menuOffsetY: () -> Float) {
+    val base = LocalDensity.current
+    CompositionLocalProvider(
+        LocalTooltips provides false,
+        LocalDensity provides Density(base.density * scale, base.fontScale),
+    ) {
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
@@ -439,14 +475,33 @@ fun BarChrome(actions: DesktopActions, ui: DesktopUi, expanded: Boolean, menuOff
     }
 }
 
-fun buildAppMenu(app: AppEntry, pos: Offset, actions: DesktopActions, ui: DesktopUi): MenuSpec {
+fun buildAppMenu(app: AppEntry, pos: Offset, actions: DesktopActions, ui: DesktopUi, task: TaskWin? = null): MenuSpec {
     val pinned = app.key in NexoPrefs.taskbarPins
     val onDesktop = app.key in NexoPrefs.desktopItems
     val close = { ui.startOpen = false; ui.panelOpen = false; ui.overlayMenu = null }
+    val c = WindowControls.active
+    // Si la app ya tiene una ventana abierta: controles de ventana primero.
+    val windowEntries: List<MenuEntry> = if (task != null && c != null) {
+        val minimized = c.let { WindowControls.state.value.isMinimized(task) }
+        listOf(
+            if (minimized) {
+                MenuAction("Restaurar", Icons.Rounded.OpenInNew) { close(); c.restore(task) }
+            } else {
+                MenuAction("Minimizar", Icons.Rounded.Minimize) { close(); c.minimize(task) }
+            },
+            MenuAction("Maximizar / restaurar tamaño", Icons.Rounded.CropFree) { close(); c.toggleMaximize(task) },
+            MenuAction("Ajustar a la izquierda", Icons.Rounded.VerticalSplit) { close(); c.snap(task, left = true) },
+            MenuAction("Ajustar a la derecha", Icons.Rounded.VerticalSplit) { close(); c.snap(task, left = false) },
+            MenuAction("Cerrar ventana", Icons.Rounded.Close, danger = true) { close(); c.close(task) },
+            MenuDivider,
+        )
+    } else {
+        emptyList()
+    }
     return MenuSpec(
         position = pos,
         title = app.label,
-        entries = listOf(
+        entries = windowEntries + listOf(
             MenuAction("Abrir", Icons.Rounded.OpenInNew) { close(); actions.launch(app) },
             MenuAction("Abrir en ventana", Icons.Rounded.FilterNone) { close(); actions.launch(app, WindowMode.WINDOW) },
             MenuAction("Abrir maximizada", Icons.Rounded.CropFree) { close(); actions.launch(app, WindowMode.MAXIMIZED) },

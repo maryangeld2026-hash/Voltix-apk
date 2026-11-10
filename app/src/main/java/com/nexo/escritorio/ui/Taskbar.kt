@@ -72,6 +72,8 @@ fun Taskbar(
     modifier: Modifier,
     byKey: Map<String, AppEntry>,
     running: List<String>,
+    minimized: List<String>,
+    onActivate: (AppEntry) -> Unit,
     ui: DesktopUi,
     actions: DesktopActions,
     now: LocalDateTime,
@@ -115,9 +117,10 @@ fun Taskbar(
                 TaskbarApp(
                     app = app,
                     isOpen = app.key in running,
+                    isMinimized = app.key in minimized,
                     onClick = {
                         ui.closeAll()
-                        actions.launch(app)
+                        onActivate(app)
                     },
                     onMenu = { pos ->
                         ui.closeAll()
@@ -269,7 +272,13 @@ private fun BarIconButton(icon: ImageVector, label: String, onClick: () -> Unit)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TaskbarApp(app: AppEntry, isOpen: Boolean, onClick: () -> Unit, onMenu: (Offset) -> Unit) {
+private fun TaskbarApp(
+    app: AppEntry,
+    isOpen: Boolean,
+    isMinimized: Boolean,
+    onClick: () -> Unit,
+    onMenu: (Offset) -> Unit,
+) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     val pressed by source.collectIsPressedAsState()
@@ -300,7 +309,14 @@ private fun TaskbarApp(app: AppEntry, isOpen: Boolean, onClick: () -> Unit, onMe
             .contextMenuTrigger(onMenu),
         contentAlignment = Alignment.Center,
     ) {
-        AppIconImage(app, 30.dp, Modifier.graphicsLayer { scaleX = scale; scaleY = scale })
+        AppIconImage(
+            app, 30.dp,
+            Modifier.graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                alpha = if (isMinimized) 0.7f else 1f
+            },
+        )
         if (isOpen) {
             Box(
                 Modifier
@@ -309,10 +325,10 @@ private fun TaskbarApp(app: AppEntry, isOpen: Boolean, onClick: () -> Unit, onMe
                     .width(indicatorW)
                     .height(3.dp)
                     .clip(CircleShape)
-                    .background(accent)
+                    .background(if (isMinimized) Nexo.textDim.copy(alpha = 0.6f) else accent)
             )
         }
-        if (hovered) HoverTooltip(app.label)
+        if (hovered) HoverTooltip(if (isMinimized) "${app.label} (minimizada)" else app.label)
     }
 }
 

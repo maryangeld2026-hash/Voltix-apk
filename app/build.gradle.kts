@@ -47,6 +47,9 @@ dependencies {
     implementation("androidx.savedstate:savedstate-ktx:1.2.1")
     // Permite usar las funciones de ventanas que Android no publica oficialmente
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:4.3")
+    // Shizuku (sin root): permite cerrar, minimizar y redimensionar las ventanas de otras apps
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")

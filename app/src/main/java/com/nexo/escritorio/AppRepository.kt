@@ -61,7 +61,7 @@ object AppRepository {
         loadJob = scope.launch {
             val launcherApps = appContext.getSystemService(LauncherApps::class.java)
             val density = appContext.resources.displayMetrics.density
-            val iconPx = (72 * density).toInt().coerceIn(96, 192)
+            val iconPx = (64 * density).toInt().coerceIn(160, 224) // nítidos también en TV y 4K
             val me = Process.myUserHandle()
             val result = ArrayList<AppEntry>()
             for (user in launcherApps.profiles) {
@@ -70,7 +70,7 @@ object AppRepository {
                     val component = info.componentName
                     if (component.packageName == appContext.packageName) continue
                     val icon = try {
-                        info.getBadgedIcon(0).toBitmap(iconPx, iconPx).asImageBitmap()
+                        info.getBadgedIcon(android.util.DisplayMetrics.DENSITY_XXXHIGH).toBitmap(iconPx, iconPx).asImageBitmap()
                     } catch (e: Exception) {
                         continue
                     }

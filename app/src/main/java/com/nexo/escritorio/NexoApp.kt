@@ -9,5 +9,6 @@ class NexoApp : Application() {
         NexoPrefs.init(this)
         AppRepository.init(this)
         DisplayWatcher.start(this)
+        TaskControl.init()
     }
 }

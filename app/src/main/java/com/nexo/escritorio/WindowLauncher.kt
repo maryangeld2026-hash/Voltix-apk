@@ -31,7 +31,12 @@ object WindowLauncher {
     var screenW = 0
     var screenH = 0
     var reservedBottom = 0
+    /** Densidad de la interfaz del escritorio (ya escalada). */
+    var density = 1f
     private var cascade = 0
+
+    /** Ancho de la pantalla en dp de la interfaz (para decidir tamaños). */
+    private val widthDp: Float get() = if (density > 0f) screenW / density else screenW.toFloat()
 
     /** Apps abiertas desde el escritorio en esta sesión (si el asistente no está activo). */
     val opened = mutableStateListOf<String>()
@@ -40,6 +45,8 @@ object WindowLauncher {
         mode != WindowMode.DEFAULT -> mode
         isGame && NexoPrefs.gamesFullscreen -> WindowMode.FULLSCREEN
         NexoPrefs.openMaximized -> WindowMode.MAXIMIZED
+        // En pantallas pequeñas (por ejemplo, el teléfono) las ventanas se abren grandes.
+        screenW > 0 && widthDp < 900f -> WindowMode.MAXIMIZED
         else -> WindowMode.WINDOW
     }
 
@@ -52,7 +59,14 @@ object WindowLauncher {
             WindowMode.LEFT -> Rect(0, 0, screenW / 2, usableH)
             WindowMode.RIGHT -> Rect(screenW / 2, 0, screenW, usableH)
             else -> {
-                val w = (screenW * 0.62f).toInt()
+                // Tamaño inteligente: en pantallas grandes (TV, monitor 4K) las ventanas ocupan
+                // menos proporción para que quepan varias a la vez.
+                val fracW = when {
+                    widthDp >= 1800f -> 0.48f
+                    widthDp >= 1300f -> 0.56f
+                    else -> 0.66f
+                }
+                val w = (screenW * fracW).toInt()
                 val h = (usableH * 0.80f).toInt()
                 val step = (screenW * 0.022f).toInt()
                 val i = cascade++ % 5
@@ -224,6 +238,7 @@ class DesktopActions(private val ctx: Context, private val displayIdProvider: ()
 
     fun launch(app: AppEntry, mode: WindowMode = WindowMode.DEFAULT, newInstance: Boolean = false) {
         val resolved = WindowLauncher.resolve(mode, app.isGame)
+        WindowControls.noteLaunch(app.packageName, resolved)
         val ok = tryLaunch(app, resolved, newInstance, rich = true) || tryLaunch(app, resolved, newInstance, rich = false)
         if (ok) {
             WindowLauncher.markOpened(app.key)

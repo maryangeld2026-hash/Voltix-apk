@@ -43,6 +43,12 @@ object NexoPrefs {
     var globalWinKey by mutableStateOf(true); private set
     /** Velocidad del puntero del touchpad (0.5 – 3.0). */
     var pointerSpeed by mutableStateOf(1.6f); private set
+    /** Tamaño de la interfaz: 0 = más pequeño, 1 = automático, 2 = más grande. */
+    var uiSize by mutableIntStateOf(1); private set
+    /** Botones de minimizar, maximizar y cerrar sobre cada ventana (con Shizuku). */
+    var windowButtons by mutableStateOf(true); private set
+    /** Recolocar las ventanas cuando cambia el tamaño de la pantalla. */
+    var autoFit by mutableStateOf(true); private set
 
     val taskbarPins = mutableStateListOf<String>()
     val desktopItems = mutableStateListOf<String>()
@@ -64,6 +70,9 @@ object NexoPrefs {
         floatingBar = sp.getBoolean(K_FLOAT, true)
         globalWinKey = sp.getBoolean(K_WINKEY, true)
         pointerSpeed = sp.getFloat(K_SPEED, 1.6f)
+        uiSize = sp.getInt(K_UISIZE, 1)
+        windowButtons = sp.getBoolean(K_WINBTN, true)
+        autoFit = sp.getBoolean(K_AUTOFIT, true)
         loadList(K_PINS)?.let { taskbarPins.addAll(it) }
         loadList(K_DESK)?.let { desktopItems.addAll(it) }
     }
@@ -82,6 +91,10 @@ object NexoPrefs {
     fun changeFloatingBar(v: Boolean) { floatingBar = v; sp.edit().putBoolean(K_FLOAT, v).apply() }
     fun changeGlobalWinKey(v: Boolean) { globalWinKey = v; sp.edit().putBoolean(K_WINKEY, v).apply() }
     fun changePointerSpeed(v: Float) { pointerSpeed = v; sp.edit().putFloat(K_SPEED, v).apply() }
+
+    fun changeUiSize(v: Int) { uiSize = v; sp.edit().putInt(K_UISIZE, v).apply() }
+    fun changeWindowButtons(v: Boolean) { windowButtons = v; sp.edit().putBoolean(K_WINBTN, v).apply() }
+    fun changeAutoFit(v: Boolean) { autoFit = v; sp.edit().putBoolean(K_AUTOFIT, v).apply() }
 
     fun togglePin(key: String) {
         if (key in taskbarPins) taskbarPins.remove(key) else taskbarPins.add(key)
@@ -127,13 +140,28 @@ object NexoPrefs {
         sp.edit().putBoolean(K_INIT, true).apply()
     }
 
-    suspend fun loadCustomWallpaper() {
-        if (customWallpaper != null) return
+    private var loadedFor = 0
+
+    /**
+     * Carga el fondo personalizado a la resolución justa de la pantalla:
+     * nítido en una TV 4K y sin gastar memoria de más en un teléfono.
+     */
+    suspend fun loadCustomWallpaper(targetW: Int = 1920, targetH: Int = 1080) {
+        val target = maxOf(targetW, targetH).coerceAtLeast(720)
+        if (customWallpaper != null && loadedFor >= target) return
         val bmp = withContext(Dispatchers.IO) {
             val f = File(files, WALL_FILE)
-            if (f.exists()) BitmapFactory.decodeFile(f.absolutePath) else null
+            if (!f.exists()) return@withContext null
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(f.absolutePath, bounds)
+            var sample = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= target) sample *= 2
+            BitmapFactory.decodeFile(f.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
         }
-        if (bmp != null) customWallpaper = bmp.asImageBitmap()
+        if (bmp != null) {
+            customWallpaper = bmp.asImageBitmap()
+            loadedFor = target
+        }
     }
 
     /** Copia la foto elegida a la app (reducida para no gastar memoria) y la pone de fondo. */
@@ -143,7 +171,7 @@ object NexoPrefs {
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
                 var sample = 1
-                while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 3000) sample *= 2
+                while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 4096) sample *= 2
                 val opts = BitmapFactory.Options().apply { inSampleSize = sample }
                 val decoded = ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
                 if (decoded != null) {
@@ -155,6 +183,7 @@ object NexoPrefs {
             }
         } ?: return false
         customWallpaper = bmp.asImageBitmap()
+        loadedFor = maxOf(bmp.width, bmp.height)
         changeWallpaper(-1)
         return true
     }
@@ -180,6 +209,9 @@ object NexoPrefs {
     private const val K_FLOAT = "floating_bar"
     private const val K_WINKEY = "global_win_key"
     private const val K_SPEED = "pointer_speed"
+    private const val K_UISIZE = "ui_size"
+    private const val K_WINBTN = "window_buttons"
+    private const val K_AUTOFIT = "auto_fit"
     private const val K_PINS = "pins"
     private const val K_DESK = "desktop"
     private const val K_INIT = "defaults_done"

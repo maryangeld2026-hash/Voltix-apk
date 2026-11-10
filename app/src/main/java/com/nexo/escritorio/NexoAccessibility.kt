@@ -162,6 +162,17 @@ class NexoAccessibility : AccessibilityService() {
                 handler.post { Displays.bringDesktop(this) }
                 return true
             }
+            // Win + flechas: maximizar, minimizar y ajustar a un lado (necesita Shizuku).
+            val c = WindowControls.active
+            val top = c?.top()
+            if (c != null && top != null) {
+                when (code) {
+                    KeyEvent.KEYCODE_DPAD_UP -> { handler.post { c.toggleMaximize(top) }; return true }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> { handler.post { c.minimize(top) }; return true }
+                    KeyEvent.KEYCODE_DPAD_LEFT -> { handler.post { c.snap(top, left = true) }; return true }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> { handler.post { c.snap(top, left = false) }; return true }
+                }
+            }
         }
         return false
     }

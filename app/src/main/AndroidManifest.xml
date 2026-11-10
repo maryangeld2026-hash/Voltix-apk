@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- Barra de tareas siempre visible encima de las apps (el usuario lo autoriza) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Traer al frente y minimizar ventanas de otras apps -->
+    <uses-permission android:name="android.permission.REORDER_TASKS" />
     <!-- Opcional: se concede una sola vez por ADB para activar el modo escritorio con un botón -->
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"
@@ -13,6 +15,7 @@
 
     <!-- Ver todas las apps que se pueden abrir (Android 11+) -->
     <queries>
+        <package android:name="moe.shizuku.privileged.api" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -88,6 +91,15 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_config" />
         </service>
+
+        <!-- Shizuku: controles de ventana avanzados sin root -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
         <!-- Notificaciones en el centro de control (el usuario lo autoriza) -->
         <service

@@ -33,6 +33,10 @@ class DesktopActivity : ComponentActivity() {
     private lateinit var actions: DesktopActions
     private var overlay: BarOverlay? = null
     private var homeDisplay = Display.DEFAULT_DISPLAY
+    private var controls: WindowControls? = null
+    private var lastW = 0
+    private var lastH = 0
+    private var lastUiSize = NexoPrefs.uiSize
 
     // Si se desconecta la pantalla, el escritorio se cierra en lugar de pasarse al teléfono.
     private val displayListener = object : DisplayManager.DisplayListener {
@@ -40,7 +44,9 @@ class DesktopActivity : ComponentActivity() {
             if (displayId == homeDisplay && homeDisplay != Display.DEFAULT_DISPLAY) finish()
         }
         override fun onDisplayAdded(displayId: Int) {}
-        override fun onDisplayChanged(displayId: Int) {}
+        override fun onDisplayChanged(displayId: Int) {
+            if (displayId == homeDisplay) onScreenMaybeResized()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,6 +75,14 @@ class DesktopActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this) { ui.closeAll() }
 
         setContent { DesktopRoot(actions, ui) }
+
+        Displays.byId(this, homeDisplay)?.let { d ->
+            val size = Displays.sizeOf(d)
+            lastW = size.x
+            lastH = size.y
+            controls = WindowControls(this, desktopTaskId = { taskId }, menuOpen = { ui.anyOpen })
+                .also { it.start(d, com.nexo.escritorio.ui.UiScale.forDisplay(this, d)) }
+        }
         handleAction(intent?.getStringExtra(EXTRA_ACTION))
     }
 
@@ -79,7 +93,44 @@ class DesktopActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        TaskControl.refresh()
+        if (lastUiSize != NexoPrefs.uiSize) rebuildForNewSize()
         refreshOverlay()
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        onScreenMaybeResized()
+    }
+
+    /**
+     * La pantalla cambió de tamaño o de resolución (otra TV, ventana de scrcpy, giro del teléfono):
+     * el escritorio se reescala solo y las ventanas abiertas se reacomodan.
+     */
+    private fun onScreenMaybeResized() {
+        val d = Displays.byId(this, homeDisplay) ?: return
+        val size = Displays.sizeOf(d)
+        if (size.x == lastW && size.y == lastH) return
+        val oldW = lastW
+        val oldH = lastH
+        lastW = size.x
+        lastH = size.y
+        // Se espera a que la interfaz tome el nuevo tamaño antes de mover ventanas.
+        window.decorView.postDelayed({
+            controls?.onDisplayResized(oldW, oldH, size.x, size.y)
+        }, 350)
+        rebuildForNewSize()
+    }
+
+    /** Vuelve a crear la barra superpuesta y los botones con la nueva escala. */
+    fun rebuildForNewSize() {
+        lastUiSize = NexoPrefs.uiSize
+        overlay?.detach()
+        overlay = null
+        ui.overlayActive = false
+        refreshOverlay()
+        val d = Displays.byId(this, homeDisplay) ?: return
+        controls?.start(d, com.nexo.escritorio.ui.UiScale.forDisplay(this, d))
     }
 
     /** Pone o quita la barra superpuesta según el permiso y la preferencia. */
@@ -129,6 +180,8 @@ class DesktopActivity : ComponentActivity() {
 
     override fun onDestroy() {
         runCatching { getSystemService(DisplayManager::class.java)?.unregisterDisplayListener(displayListener) }
+        controls?.stop()
+        controls = null
         overlay?.detach()
         overlay = null
         if (current?.get() === this) current = null

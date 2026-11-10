@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity() {
 
     // ---- Datos para la pantalla de configuración ----
 
-    fun readStatus(): SetupStatus = SetupStatus(
+    fun readStatus(): SetupStatus = TaskControl.refresh().let { SetupStatus(
         developerOptions = globalFlag(AndroidSettings.Global.DEVELOPMENT_SETTINGS_ENABLED),
         freeform = globalFlag("enable_freeform_support"),
         forceDesktop = globalFlag("force_desktop_mode_on_external_displays"),
@@ -105,7 +105,10 @@ class MainActivity : ComponentActivity() {
         isXiaomi = Build.MANUFACTURER.equals("xiaomi", ignoreCase = true) ||
             Build.BRAND.equals("redmi", ignoreCase = true) || Build.BRAND.equals("poco", ignoreCase = true),
         phoneIp = phoneIp(),
-    )
+        shizukuInstalled = TaskControl.isInstalled(this),
+        shizukuRunning = TaskControl.running.value,
+        shizukuReady = TaskControl.ready.value,
+    ) }
 
     /** true/false si se pudo leer; null si el teléfono no deja comprobarlo. */
     private fun globalFlag(key: String): Boolean? = try {
@@ -140,6 +143,21 @@ class MainActivity : ComponentActivity() {
 
     fun openTouchpad() {
         startActivity(Intent(this, TouchpadActivity::class.java))
+    }
+
+    /** Abre Shizuku (o su página en la tienda si no está instalado). */
+    fun openShizuku() {
+        packageManager.getLaunchIntentForPackage(TaskControl.SHIZUKU_PACKAGE)?.let { if (tryStart(it)) return }
+        if (!tryStart(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${TaskControl.SHIZUKU_PACKAGE}")))) {
+            tryStart(Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/")))
+        }
+    }
+
+    fun requestShizuku() {
+        if (!TaskControl.requestPermission()) {
+            toast("Primero abre Shizuku y pulsa «Iniciar»")
+        }
+        window.decorView.postDelayed({ refreshTick.intValue++ }, 1500)
     }
 
     /** Busca TVs y adaptadores inalámbricos (Miracast / «Transmitir»). */

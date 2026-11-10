@@ -75,6 +75,9 @@ data class SetupStatus(
     val assistant: Boolean,
     val isXiaomi: Boolean,
     val phoneIp: String?,
+    val shizukuInstalled: Boolean,
+    val shizukuRunning: Boolean,
+    val shizukuReady: Boolean,
 )
 
 private const val PKG = "com.nexo.escritorio"
@@ -86,6 +89,9 @@ private const val MANUAL_COMMANDS = """adb shell settings put global enable_free
 adb shell settings put global force_resizable_activities 1
 adb shell settings put global force_desktop_mode_on_external_displays 1
 adb reboot"""
+
+private const val SHIZUKU_ADB =
+    "adb shell sh /storage/emulated/0/Android/data/moe.shizuku.privileged.api/start.sh"
 
 private const val SCRCPY_USB = "scrcpy --new-display=1920x1080/160 --start-app=$PKG"
 
@@ -219,6 +225,9 @@ fun SetupScreen(tick: Int, display: Display?, host: MainActivity) {
                     PrimaryButton("Abrir touchpad", Modifier.fillMaxWidth()) { host.openTouchpad() }
                 }
 
+                Spacer(Modifier.height(14.dp))
+                WindowControlsCard(status, host)
+
                 Spacer(Modifier.height(22.dp))
                 Card {
                     Text("Preparación (solo una vez)", color = Nexo.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
@@ -322,6 +331,67 @@ fun SetupScreen(tick: Int, display: Display?, host: MainActivity) {
                 Spacer(Modifier.height(24.dp))
             }
         }
+    }
+}
+
+/** Controles de ventana completos con Shizuku (sin root). */
+@Composable
+private fun WindowControlsCard(status: SetupStatus, host: MainActivity) {
+    Card {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(Icons.Rounded.DesktopWindows)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Ventanas como en un PC", color = Nexo.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Botones de minimizar, maximizar y cerrar en cada ventana, minimizar desde la barra, Win + flechas y ventanas que se reacomodan solas al cambiar de pantalla.",
+                    color = Nexo.textDim,
+                    fontSize = 13.sp,
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        StatusLine(
+            when {
+                status.shizukuReady -> true
+                else -> false
+            },
+            when {
+                status.shizukuReady -> "Activo"
+                status.shizukuRunning -> "Shizuku en marcha: falta dar permiso a Nexo"
+                status.shizukuInstalled -> "Shizuku instalado: falta iniciarlo"
+                else -> "Necesita la app gratuita Shizuku (sin root)"
+            },
+        )
+        if (!status.shizukuReady) {
+            Spacer(Modifier.height(8.dp))
+            MiniStep(1, "Instala Shizuku desde la tienda (gratis, sin root).")
+            MiniStep(2, "Abre Shizuku y pulsa «Iniciar» en «Iniciar mediante depuración inalámbrica» (Android 11+, con Wi‑Fi). Se empareja una sola vez.")
+            MiniStep(3, "Vuelve aquí y pulsa «Dar permiso a Nexo».")
+            Spacer(Modifier.height(10.dp))
+            FlowRow2 {
+                PrimaryButton(if (status.shizukuInstalled) "Abrir Shizuku" else "Instalar Shizuku") { host.openShizuku() }
+                GhostButton("Dar permiso a Nexo") { host.requestShizuku() }
+            }
+            Note("Con un PC también puedes iniciarlo por cable con este comando:")
+            Spacer(Modifier.height(6.dp))
+            CodeBlock(SHIZUKU_ADB) { host.copy(SHIZUKU_ADB) }
+            Note("Shizuku se detiene al reiniciar el teléfono: ábrelo y pulsa «Iniciar» otra vez. Sin Shizuku, las ventanas usan los botones propios de Android.")
+        }
+    }
+}
+
+@Composable
+private fun StatusLine(ok: Boolean, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            if (ok) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+            null,
+            tint = if (ok) Nexo.success else Nexo.textDim,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(label, color = if (ok) Nexo.success else Nexo.textDim, fontSize = 12.sp, fontWeight = FontWeight.Medium)
     }
 }
 

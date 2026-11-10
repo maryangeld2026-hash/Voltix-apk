@@ -197,6 +197,32 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                     )
                 }
 
+                Section("Pantalla") {
+                    Text("Tamaño de la interfaz", color = Nexo.textDim, fontSize = 13.sp)
+                    Spacer(Modifier.height(10.dp))
+                    Segmented(listOf("Más pequeño", "Automático", "Más grande"), NexoPrefs.uiSize) {
+                        NexoPrefs.changeUiSize(it)
+                        com.nexo.escritorio.DesktopActivity.current?.get()?.rebuildForNewSize()
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "En «Automático» Nexo se adapta solo a cada pantalla: más grande en una TV, más compacto en un portátil o en el teléfono.",
+                        color = Nexo.textFaint,
+                        fontSize = 12.sp,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    SwitchRow(
+                        "Reacomodar ventanas al cambiar de pantalla",
+                        "Si cambia la resolución o el tamaño, las ventanas se ajustan solas",
+                        NexoPrefs.autoFit,
+                    ) { NexoPrefs.changeAutoFit(it) }
+                    SwitchRow(
+                        "Botones de minimizar, maximizar y cerrar en las ventanas",
+                        "Necesita Shizuku (ver la app en el teléfono)",
+                        NexoPrefs.windowButtons,
+                    ) { NexoPrefs.changeWindowButtons(it) }
+                }
+
                 Section("Juegos") {
                     SwitchRow(
                         "Abrir los juegos a pantalla completa",
@@ -247,6 +273,8 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                     Shortcut("Win + I", "Ajustes de Nexo")
                     Shortcut("Win + D", "Mostrar el escritorio")
                     Shortcut("Win + T", "Touchpad en el teléfono")
+                    Shortcut("Win + ↑ / ↓", "Maximizar / minimizar la ventana (con Shizuku)")
+                    Shortcut("Win + ← / →", "Ajustar la ventana a un lado (con Shizuku)")
                     Shortcut("Clic derecho / Esc dentro de una app", "Volver atrás")
                     Shortcut("Ctrl + Esc", "Inicio (si tu teclado no tiene tecla Windows)")
                     Shortcut("Esc", "Cerrar menús")
