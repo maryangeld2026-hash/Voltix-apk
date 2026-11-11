@@ -9,6 +9,7 @@ Convierte tu teléfono Android en un computador: conectas un monitor, teclado y 
 - **Menú de inicio** con búsqueda instantánea, apps fijadas, **sección de juegos** y todas las apps.
 - **Ventanas**: cada app en una ventana que se mueve y redimensiona; clic derecho para maximizada, mitad izquierda/derecha, nueva ventana o **pantalla completa**. Funciona también en la pantalla del propio teléfono.
 - **Ventanas como en un PC**: botones de minimizar, maximizar y cerrar sobre cada ventana; clic en la barra para minimizar y restaurar; Win + ↑/↓/←/→; menú de ventana con clic derecho en la barra. Funciona con el **asistente de Nexo** (sin instalar nada) o con **Shizuku** (más rápido); Nexo elige solo el mejor modo disponible.
+- **Ocupa toda la pantalla**: el escritorio llena siempre el monitor, TV o ventana de scrcpy (y si el sistema lo abre más pequeño, se agranda solo); las apps se abren por defecto ocupando todo el ancho y alto (o a pantalla completa, a elegir); al duplicar el teléfono en una TV, Nexo cambia el formato del teléfono a 16:9 (o 16:10 / 21:9) para llenarla sin franjas negras y lo restaura al salir.
 - **Todo se adapta solo a la pantalla**: la interfaz se escala según el tamaño (más grande en TV, compacta en portátil o teléfono), las ventanas eligen un tamaño adecuado y se reacomodan si cambia la resolución; fondo e iconos en alta resolución.
 - **Juegos**: se detectan solos, se abren a pantalla completa y la barra se esconde mientras juegas. Los mandos funcionan directamente.
 - **Centro de control**: Wi‑Fi, Bluetooth, sonido, pantalla, batería, ajustes, captura de pantalla, bloqueo y touchpad, más tus notificaciones.
@@ -71,6 +72,8 @@ adb shell pm grant com.nexo.escritorio android.permission.WRITE_SECURE_SETTINGS
 - **Accesibilidad (asistente de Nexo)**: apps abiertas reales en la barra, tecla Windows global, touchpad, captura y bloqueo. En Android 13+, si sale «Ajuste restringido»: Información de la app › ⋮ › «Permitir ajustes restringidos».
 - **Acceso a notificaciones**: notificaciones en el centro de control.
 - **Xiaomi / Redmi / POCO**: en Otros permisos, activa «Mostrar ventanas emergentes mientras se ejecuta en segundo plano».
+
+Si la pantalla del teléfono quedara con franjas tras usar «llenar la TV», abre Nexo (se arregla solo) o ejecuta `adb shell wm size reset`.
 
 ## Requisitos y límites
 
