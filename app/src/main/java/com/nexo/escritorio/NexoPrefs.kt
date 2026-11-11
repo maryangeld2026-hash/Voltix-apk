@@ -30,7 +30,10 @@ object NexoPrefs {
     var wallpaper by mutableIntStateOf(0); private set
     var animatedWallpaper by mutableStateOf(true); private set
     var accent by mutableIntStateOf(0); private set
-    var openMaximized by mutableStateOf(false); private set
+    /** Cómo se abren las apps: 0 = en ventana, 1 = maximizadas (con barra), 2 = pantalla completa. */
+    var openMode by mutableIntStateOf(1); private set
+    /** Formato al duplicar el teléfono en una TV: 0 = original, 1 = 16:9, 2 = 16:10, 3 = 21:9. */
+    var mirrorFit by mutableIntStateOf(1); private set
     /** 0 = pequeños, 1 = normales, 2 = grandes */
     var iconSize by mutableIntStateOf(1); private set
     var clock24 by mutableStateOf(true); private set
@@ -60,7 +63,8 @@ object NexoPrefs {
         wallpaper = sp.getInt(K_WALL, 0)
         animatedWallpaper = sp.getBoolean(K_ANIM, true)
         accent = sp.getInt(K_ACCENT, 0)
-        openMaximized = sp.getBoolean(K_MAX, false)
+        openMode = sp.getInt(K_OPEN_MODE, 1)
+        mirrorFit = sp.getInt(K_MIRROR_FIT, 1)
         iconSize = sp.getInt(K_ICON, 1)
         clock24 = sp.getBoolean(K_24H, true)
         showDesktopIcons = sp.getBoolean(K_SHOW_ICONS, true)
@@ -80,7 +84,17 @@ object NexoPrefs {
     fun changeWallpaper(i: Int) { wallpaper = i; sp.edit().putInt(K_WALL, i).apply() }
     fun changeAnimated(v: Boolean) { animatedWallpaper = v; sp.edit().putBoolean(K_ANIM, v).apply() }
     fun changeAccent(i: Int) { accent = i; sp.edit().putInt(K_ACCENT, i).apply() }
-    fun changeOpenMaximized(v: Boolean) { openMaximized = v; sp.edit().putBoolean(K_MAX, v).apply() }
+    fun changeOpenMode(v: Int) { openMode = v; sp.edit().putInt(K_OPEN_MODE, v).apply() }
+    fun changeMirrorFit(v: Int) { mirrorFit = v; sp.edit().putInt(K_MIRROR_FIT, v).apply() }
+
+    /** true mientras Nexo tiene cambiada la resolución del teléfono (para restaurarla siempre). */
+    var fitActive: Boolean
+        get() = sp.getBoolean(K_FIT_ACTIVE, false)
+        set(v) { sp.edit().putBoolean(K_FIT_ACTIVE, v).commit() }
+
+    const val OPEN_WINDOW = 0
+    const val OPEN_MAXIMIZED = 1
+    const val OPEN_FULLSCREEN = 2
     fun changeIconSize(v: Int) { iconSize = v; sp.edit().putInt(K_ICON, v).apply() }
     fun changeClock24(v: Boolean) { clock24 = v; sp.edit().putBoolean(K_24H, v).apply() }
     fun changeShowDesktopIcons(v: Boolean) { showDesktopIcons = v; sp.edit().putBoolean(K_SHOW_ICONS, v).apply() }
@@ -209,6 +223,9 @@ object NexoPrefs {
     private const val K_FLOAT = "floating_bar"
     private const val K_WINKEY = "global_win_key"
     private const val K_SPEED = "pointer_speed"
+    private const val K_OPEN_MODE = "open_mode"
+    private const val K_MIRROR_FIT = "mirror_fit"
+    private const val K_FIT_ACTIVE = "fit_active"
     private const val K_UISIZE = "ui_size"
     private const val K_WINBTN = "window_buttons"
     private const val K_AUTOFIT = "auto_fit"

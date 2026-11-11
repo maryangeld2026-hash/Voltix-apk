@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nexo.escritorio.NexoPrefs
+import com.nexo.escritorio.currentDisplayId
 import kotlinx.coroutines.launch
 
 /** Ventana de ajustes del escritorio: fondo, color, ventanas, iconos y atajos. */
@@ -186,9 +187,19 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                     Text("Cómo se abren las aplicaciones", color = Nexo.textDim, fontSize = 13.sp)
                     Spacer(Modifier.height(10.dp))
                     Segmented(
-                        listOf("En ventana", "Maximizadas"),
-                        if (NexoPrefs.openMaximized) 1 else 0,
-                    ) { NexoPrefs.changeOpenMaximized(it == 1) }
+                        listOf("En ventana", "Toda la pantalla", "Pantalla completa"),
+                        NexoPrefs.openMode,
+                    ) { NexoPrefs.changeOpenMode(it) }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        when (NexoPrefs.openMode) {
+                            0 -> "Las apps se abren en ventanas que puedes mover; su tamaño se adapta a la pantalla."
+                            2 -> "Las apps llenan toda la pantalla y la barra se esconde (tócala abajo o pulsa la tecla Windows para verla)."
+                            else -> "Las apps ocupan todo el ancho y el alto de la pantalla, dejando visible la barra de tareas."
+                        },
+                        color = Nexo.textFaint,
+                        fontSize = 12.sp,
+                    )
                     Spacer(Modifier.height(10.dp))
                     Text(
                         "Consejo: haz clic derecho sobre cualquier app para abrirla en la mitad izquierda o derecha de la pantalla, o en una ventana nueva.",
@@ -221,6 +232,26 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                         "Con el asistente de Nexo o con Shizuku (ver la app en el teléfono)",
                         NexoPrefs.windowButtons,
                     ) { NexoPrefs.changeWindowButtons(it) }
+                }
+
+                Section("Duplicar el teléfono en una TV") {
+                    Text("Formato de la imagen", color = Nexo.textDim, fontSize = 13.sp)
+                    Spacer(Modifier.height(10.dp))
+                    val ctx = androidx.compose.ui.platform.LocalContext.current
+                    Segmented(com.nexo.escritorio.ScreenFit.labels, NexoPrefs.mirrorFit) {
+                        NexoPrefs.changeMirrorFit(it)
+                        val desk = com.nexo.escritorio.DesktopActivity.current?.get()
+                        if (desk != null && desk.currentDisplayId() == android.view.Display.DEFAULT_DISPLAY) {
+                            com.nexo.escritorio.ScreenFit.apply(ctx)
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Cuando el escritorio está en el teléfono y lo duplicas en una TV, Nexo cambia el formato del teléfono al de la TV para que la imagen la llene de borde a borde, sin franjas. Al salir del escritorio todo vuelve a la normalidad." +
+                            if (com.nexo.escritorio.ScreenFit.canApply(ctx)) "" else " Necesita el permiso de ADB o Shizuku (ver la app en el teléfono).",
+                        color = Nexo.textFaint,
+                        fontSize = 12.sp,
+                    )
                 }
 
                 Section("Juegos") {

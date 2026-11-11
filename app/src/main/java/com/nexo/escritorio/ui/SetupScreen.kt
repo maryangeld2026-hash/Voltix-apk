@@ -209,6 +209,22 @@ fun SetupScreen(tick: Int, display: Display?, host: MainActivity) {
                         PrimaryButton("Abrir escritorio aquí") { host.previewHere() }
                         GhostButton("Transmitir pantalla") { host.openCast() }
                     }
+                    Spacer(Modifier.height(14.dp))
+                    Text("Llenar toda la TV (sin franjas negras)", color = Nexo.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Los teléfonos son más alargados que las TV. Nexo cambia el formato del teléfono al de la TV mientras usas el escritorio y lo restaura al salir.",
+                        color = Nexo.textDim,
+                        fontSize = 13.sp,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Segmented(com.nexo.escritorio.ScreenFit.labels, NexoPrefs.mirrorFit) { NexoPrefs.changeMirrorFit(it) }
+                    Spacer(Modifier.height(6.dp))
+                    StatusLine(
+                        status.canWriteSettings || status.shizukuReady,
+                        if (status.canWriteSettings || status.shizukuReady) "Listo para llenar la TV"
+                        else "Necesita el permiso de ADB (tarjeta «¿Tienes un computador?») o Shizuku",
+                    )
+                    Note("Si alguna vez la pantalla del teléfono se queda con franjas, abre Nexo y se arregla sola, o ejecuta «adb shell wm size reset».")
                 }
 
                 Spacer(Modifier.height(14.dp))

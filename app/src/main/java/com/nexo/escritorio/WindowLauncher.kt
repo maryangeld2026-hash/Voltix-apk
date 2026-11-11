@@ -44,7 +44,9 @@ object WindowLauncher {
     fun resolve(mode: WindowMode, isGame: Boolean): WindowMode = when {
         mode != WindowMode.DEFAULT -> mode
         isGame && NexoPrefs.gamesFullscreen -> WindowMode.FULLSCREEN
-        NexoPrefs.openMaximized -> WindowMode.MAXIMIZED
+        // Cómo se abren las apps (Ajustes de Nexo): por defecto ocupan toda la pantalla.
+        NexoPrefs.openMode == NexoPrefs.OPEN_FULLSCREEN -> WindowMode.FULLSCREEN
+        NexoPrefs.openMode == NexoPrefs.OPEN_MAXIMIZED -> WindowMode.MAXIMIZED
         // En pantallas pequeñas (por ejemplo, el teléfono) las ventanas se abren grandes.
         screenW > 0 && widthDp < 900f -> WindowMode.MAXIMIZED
         else -> WindowMode.WINDOW
@@ -146,11 +148,11 @@ object Displays {
         val o = ActivityOptions.makeBasic()
         o.setLaunchDisplayId(display.displayId)
         if (display.displayId != Display.DEFAULT_DISPLAY) {
-            // En un monitor con ventanas, el escritorio ocupa toda la pantalla y no es una ventana más.
-            if (!Hidden.setWindowingMode(o, Hidden.WINDOWING_MODE_FULLSCREEN)) {
-                val size = sizeOf(display)
-                o.setLaunchBounds(Rect(0, 0, size.x, size.y))
-            }
+            // El escritorio ocupa SIEMPRE toda la pantalla: se pide pantalla completa y, además,
+            // el tamaño exacto de la pantalla por si el sistema lo abre como ventana.
+            Hidden.setWindowingMode(o, Hidden.WINDOWING_MODE_FULLSCREEN)
+            val size = sizeOf(display)
+            o.setLaunchBounds(Rect(0, 0, size.x, size.y))
         } else {
             Hidden.setWindowingMode(o, Hidden.WINDOWING_MODE_FULLSCREEN)
         }

@@ -83,6 +83,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Seguridad: si la resolución del teléfono quedó cambiada, se restaura.
+        ScreenFit.restoreIfLeftover(this)
         refreshTick.intValue++
     }
 
