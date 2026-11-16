@@ -31,7 +31,7 @@ object ScreenFit {
     fun canApply(ctx: Context): Boolean = hasOwnPermission(ctx) || TaskControl.ready.value
 
     /** Servicio de ventanas de Android: con nuestro permiso o, si no, a través de Shizuku. */
-    private fun windowService(ctx: Context): Any? = runCatching {
+    fun windowService(ctx: Context): Any? = runCatching {
         if (hasOwnPermission(ctx)) {
             Class.forName("android.view.WindowManagerGlobal").getMethod("getWindowManagerService").invoke(null)
         } else if (TaskControl.ready.value) {

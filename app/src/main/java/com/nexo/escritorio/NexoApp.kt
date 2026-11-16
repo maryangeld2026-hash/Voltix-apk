@@ -11,5 +11,6 @@ class NexoApp : Application() {
         DisplayWatcher.start(this)
         TaskControl.init()
         ScreenFit.restoreIfLeftover(this)
+        AppFit.restoreIfLeftover(this)
     }
 }

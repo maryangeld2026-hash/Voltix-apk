@@ -96,6 +96,22 @@ object WindowLauncher {
         return o
     }
 
+    /**
+     * Toma las medidas reales de la pantalla donde se va a abrir la app (resolución, escala
+     * y barra de tareas), para que la ventana se calcule para ESE dispositivo.
+     */
+    fun syncTo(ctx: Context, displayId: Int) {
+        val d = Displays.byId(ctx, displayId) ?: return
+        val size = Displays.sizeOf(d)
+        if (size.x <= 0 || size.y <= 0) return
+        val scale = com.nexo.escritorio.ui.UiScale.forDisplay(ctx, d)
+        val dens = ctx.applicationContext.createDisplayContext(d).resources.displayMetrics.density * scale
+        screenW = size.x
+        screenH = size.y
+        density = dens
+        reservedBottom = (com.nexo.escritorio.ui.TASKBAR_RESERVE_DP * dens).toInt()
+    }
+
     fun markOpened(key: String) {
         opened.remove(key)
         opened.add(key)
@@ -239,8 +255,11 @@ class DesktopActions(private val ctx: Context, private val displayIdProvider: ()
     var onLaunched: (WindowMode) -> Unit = {}
 
     fun launch(app: AppEntry, mode: WindowMode = WindowMode.DEFAULT, newInstance: Boolean = false) {
+        WindowLauncher.syncTo(ctx, displayId)
         val resolved = WindowLauncher.resolve(mode, app.isGame)
         WindowControls.noteLaunch(app.packageName, resolved)
+        // Apps que solo funcionan en vertical: que se adapten a la ventana (Android 14+, Shizuku).
+        if (resolved != WindowMode.FULLSCREEN || !app.isGame) AppFit.prepareApp(app.packageName)
         val ok = tryLaunch(app, resolved, newInstance, rich = true) || tryLaunch(app, resolved, newInstance, rich = false)
         if (ok) {
             WindowLauncher.markOpened(app.key)
@@ -275,6 +294,7 @@ class DesktopActions(private val ctx: Context, private val displayIdProvider: ()
     /** Abre cualquier pantalla (ajustes, archivos, web…) en una ventana. */
     fun open(intent: Intent, mode: WindowMode = WindowMode.WINDOW, quiet: Boolean = false): Boolean {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        WindowLauncher.syncTo(ctx, displayId)
         for (rich in listOf(true, false)) {
             try {
                 ctx.startActivity(intent, WindowLauncher.options(displayId, mode, rich).toBundle())

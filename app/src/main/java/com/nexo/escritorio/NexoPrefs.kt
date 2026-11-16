@@ -34,6 +34,10 @@ object NexoPrefs {
     var openMode by mutableIntStateOf(1); private set
     /** Formato al duplicar el teléfono en una TV: 0 = original, 1 = 16:9, 2 = 16:10, 3 = 21:9. */
     var mirrorFit by mutableIntStateOf(1); private set
+    /** Escala de las apps en pantallas externas (ver AppFit.labels). */
+    var appScale by mutableIntStateOf(2); private set
+    /** Apps que solo funcionan en vertical: adaptarlas a la ventana (Android 14+, Shizuku). */
+    var forceAppsFit by mutableStateOf(true); private set
     /** 0 = pequeños, 1 = normales, 2 = grandes */
     var iconSize by mutableIntStateOf(1); private set
     var clock24 by mutableStateOf(true); private set
@@ -65,6 +69,8 @@ object NexoPrefs {
         accent = sp.getInt(K_ACCENT, 0)
         openMode = sp.getInt(K_OPEN_MODE, 1)
         mirrorFit = sp.getInt(K_MIRROR_FIT, 1)
+        appScale = sp.getInt(K_APP_SCALE, 2)
+        forceAppsFit = sp.getBoolean(K_FORCE_APPS, true)
         iconSize = sp.getInt(K_ICON, 1)
         clock24 = sp.getBoolean(K_24H, true)
         showDesktopIcons = sp.getBoolean(K_SHOW_ICONS, true)
@@ -86,6 +92,18 @@ object NexoPrefs {
     fun changeAccent(i: Int) { accent = i; sp.edit().putInt(K_ACCENT, i).apply() }
     fun changeOpenMode(v: Int) { openMode = v; sp.edit().putInt(K_OPEN_MODE, v).apply() }
     fun changeMirrorFit(v: Int) { mirrorFit = v; sp.edit().putInt(K_MIRROR_FIT, v).apply() }
+    fun changeAppScale(v: Int) { appScale = v; sp.edit().putInt(K_APP_SCALE, v).apply() }
+    fun changeForceAppsFit(v: Boolean) { forceAppsFit = v; sp.edit().putBoolean(K_FORCE_APPS, v).apply() }
+
+    /** Pantallas a las que Nexo cambió la escala (para restaurarlas siempre). */
+    var scaledDisplays: Set<Int>
+        get() = sp.getString(K_SCALED, "").orEmpty().split(',').mapNotNull { it.toIntOrNull() }.toSet()
+        set(v) { sp.edit().putString(K_SCALED, v.joinToString(",")).commit() }
+
+    /** Apps a las que Nexo puso «pantalla completa» (para restaurarlas siempre). */
+    var forcedApps: Set<String>
+        get() = sp.getStringSet(K_FORCED_APPS, emptySet()).orEmpty().toSet()
+        set(v) { sp.edit().putStringSet(K_FORCED_APPS, v.toSet()).commit() }
 
     /** true mientras Nexo tiene cambiada la resolución del teléfono (para restaurarla siempre). */
     var fitActive: Boolean
@@ -223,6 +241,10 @@ object NexoPrefs {
     private const val K_FLOAT = "floating_bar"
     private const val K_WINKEY = "global_win_key"
     private const val K_SPEED = "pointer_speed"
+    private const val K_APP_SCALE = "app_scale"
+    private const val K_FORCE_APPS = "force_apps_fit"
+    private const val K_SCALED = "scaled_displays"
+    private const val K_FORCED_APPS = "forced_apps"
     private const val K_OPEN_MODE = "open_mode"
     private const val K_MIRROR_FIT = "mirror_fit"
     private const val K_FIT_ACTIVE = "fit_active"

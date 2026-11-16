@@ -192,10 +192,13 @@ class WindowControls(
         val now = SystemClock.uptimeMillis()
         for (t in others) {
             if (seen.add(t.taskId)) {
+                // Ventana nueva (abierta desde Nexo o desde cualquier otro sitio): se revisa su tamaño.
+                val id = t.taskId
+                main.postDelayed({ fitNew(id) }, 900)
                 val p = t.pkg?.let { pendingLaunch.remove(it) }
                 if (p != null && now - p.second < 10_000) {
                     placement[t.taskId] = when (p.first) {
-                        WindowMode.MAXIMIZED -> Placement.MAX
+                        WindowMode.MAXIMIZED, WindowMode.FULLSCREEN -> Placement.MAX
                         WindowMode.LEFT -> Placement.LEFT
                         WindowMode.RIGHT -> Placement.RIGHT
                         else -> Placement.FREE
@@ -209,6 +212,90 @@ class WindowControls(
         restoreBounds.keys.retainAll(alive)
         _state.value = DesktopWindows(visible, minimized)
         updatePills(visible)
+    }
+
+    // ---------- Ajuste automático ----------
+
+    private fun near(a: Rect, b: Rect): Boolean {
+        val tolX = (WindowLauncher.screenW * 0.03f).toInt().coerceAtLeast(12)
+        val tolY = (WindowLauncher.screenH * 0.03f).toInt().coerceAtLeast(12)
+        return kotlin.math.abs(a.left - b.left) <= tolX && kotlin.math.abs(a.right - b.right) <= tolX &&
+            kotlin.math.abs(a.top - b.top) <= tolY && kotlin.math.abs(a.bottom - b.bottom) <= tolY
+    }
+
+    /**
+     * Revisa una ventana recién abierta: si Android no respetó el tamaño (por ejemplo, la abrió
+     * pequeña o con forma de teléfono), la lleva al tamaño que corresponde en esta pantalla.
+     */
+    private fun fitNew(id: Int) {
+        if (!NexoPrefs.autoFit) return
+        val t = _state.value.visible.firstOrNull { it.taskId == id } ?: return
+        val b = t.bounds ?: return
+        val full = fullDisplay() ?: return
+        WindowLauncher.syncTo(ctx, displayId)
+        // Ya ocupa toda la pantalla (juegos, videos): nada que hacer.
+        if (b.width() >= full.width() - 2 && b.height() >= full.height() - 2) return
+        val u = usable()
+        val target: Rect = when (placement[id]) {
+            Placement.MAX -> u
+            Placement.LEFT -> Rect(0, 0, u.width() / 2, u.bottom)
+            Placement.RIGHT -> Rect(u.width() / 2, 0, u.right, u.bottom)
+            Placement.FREE -> {
+                // En ventana: solo se corrige si quedó diminuta o se sale de la pantalla.
+                val tiny = b.width() * b.height() < u.width() * u.height() * 0.25f
+                val outside = b.right > full.right || b.bottom > full.bottom || b.left < 0 || b.top < 0
+                if (!tiny && !outside) return
+                WindowLauncher.bounds(WindowMode.WINDOW) ?: return
+            }
+            null -> {
+                // Abierta desde fuera de Nexo: se usa el modo elegido en Ajustes.
+                if (NexoPrefs.openMode == NexoPrefs.OPEN_WINDOW) {
+                    val tiny = b.width() * b.height() < u.width() * u.height() * 0.25f
+                    if (!tiny) return
+                    placement[id] = Placement.FREE
+                    WindowLauncher.bounds(WindowMode.WINDOW) ?: return
+                } else {
+                    placement[id] = Placement.MAX
+                    u
+                }
+            }
+        }
+        if (near(b, target)) return
+        place(t, target)
+    }
+
+    /** Coloca una ventana con el mejor método disponible y comprueba que lo consiguió. */
+    private fun place(t: TaskWin, target: Rect) {
+        if (t.viaShizuku) {
+            bg { TaskControl.resize(t.taskId, target) }
+        } else {
+            val s = NexoAccessibility.get() ?: return
+            val b = t.bounds ?: return
+            val isMax = target == usable()
+            if (!(isMax && s.clickCaptionButton(displayId, b, NexoAccessibility.CaptionButton.MAXIMIZE))) {
+                assistPlace(t, target)
+            }
+        }
+        verify(t, target)
+    }
+
+    /**
+     * Tras ampliar o colocar: si la app no cambió de tamaño es porque no lo permite.
+     * Con Android 14+ y Shizuku se prepara para que la próxima vez sí se adapte.
+     */
+    private fun verify(t: TaskWin, target: Rect) {
+        val id = t.taskId
+        main.postDelayed({
+            val now = _state.value.visible.firstOrNull { it.taskId == id }?.bounds ?: return@postDelayed
+            if (near(now, target)) return@postDelayed
+            val pkg = t.pkg ?: return@postDelayed
+            val msg = if (AppFit.prepareApp(pkg)) {
+                "Esta app no se dejaba agrandar. La próxima vez que la abras ocupará toda la ventana."
+            } else {
+                "Esta app no permite cambiar su tamaño. Activa «Forzar actividades redimensionables» en Opciones de desarrollador y reinicia."
+            }
+            android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_LONG).show()
+        }, 1500)
     }
 
     // ---------- Acciones ----------
@@ -337,7 +424,9 @@ class WindowControls(
             } else {
                 restoreBounds[t.taskId] = Rect(b)
                 placement[t.taskId] = Placement.MAX
+                WindowLauncher.syncTo(ctx, displayId)
                 assistPlace(t, usable())
+                verify(t, usable())
             }
             return
         }
@@ -348,8 +437,10 @@ class WindowControls(
         } else {
             t.bounds?.let { restoreBounds[t.taskId] = Rect(it) }
             placement[t.taskId] = Placement.MAX
+            WindowLauncher.syncTo(ctx, displayId)
             val r = usable()
             bg { TaskControl.resize(t.taskId, r); TaskControl.toFront(ctx, t.taskId) }
+            verify(t, r)
         }
     }
 

@@ -40,6 +40,7 @@ class DesktopActivity : ComponentActivity() {
     private var lastW = 0
     private var lastH = 0
     private var lastUiSize = NexoPrefs.uiSize
+    private var lastDpi = 0
 
     // Si se desconecta la pantalla, el escritorio se cierra en lugar de pasarse al teléfono.
     private val displayListener = object : DisplayManager.DisplayListener {
@@ -77,6 +78,9 @@ class DesktopActivity : ComponentActivity() {
         }
         // En el teléfono (para duplicar en la TV): formato de la TV para llenarla sin franjas.
         if (homeDisplay == Display.DEFAULT_DISPLAY) ScreenFit.apply(this)
+        // En un monitor o TV: escala de las apps adecuada a esa pantalla.
+        else Displays.byId(this, homeDisplay)?.let { AppFit.applyScale(this, it) }
+        lastDpi = resources.displayMetrics.densityDpi
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
             hide(WindowInsetsCompat.Type.systemBars())
@@ -156,6 +160,12 @@ class DesktopActivity : ComponentActivity() {
     private fun onScreenMaybeResized() {
         val d = Displays.byId(this, homeDisplay) ?: return
         val size = Displays.sizeOf(d)
+        val dpi = resources.displayMetrics.densityDpi
+        if (dpi != lastDpi) {
+            // Cambió la escala de la pantalla: la barra y los botones se rehacen a la nueva escala.
+            lastDpi = dpi
+            window.decorView.post { rebuildForNewSize() }
+        }
         if (size.x == lastW && size.y == lastH) return
         val oldW = lastW
         val oldH = lastH
@@ -231,8 +241,9 @@ class DesktopActivity : ComponentActivity() {
         overlay?.detach()
         overlay = null
         if (current?.get() === this) current = null
-        // La pantalla del teléfono vuelve a su formato original.
+        // La pantalla del teléfono, la escala y el formato de las apps vuelven a la normalidad.
         if (homeDisplay == Display.DEFAULT_DISPLAY) ScreenFit.reset(this)
+        AppFit.restoreAll(this)
         super.onDestroy()
     }
 }

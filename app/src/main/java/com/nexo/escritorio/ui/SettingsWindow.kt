@@ -223,10 +223,36 @@ fun SettingsWindow(ui: DesktopUi, maxW: Dp, maxH: Dp) {
                     )
                     Spacer(Modifier.height(6.dp))
                     SwitchRow(
-                        "Reacomodar ventanas al cambiar de pantalla",
-                        "Si cambia la resolución o el tamaño, las ventanas se ajustan solas",
+                        "Ajustar las ventanas automáticamente",
+                        "Las ventanas nuevas (también las que abre otra app) toman el tamaño correcto para esta pantalla, y se reacomodan si cambia la resolución",
                         NexoPrefs.autoFit,
                     ) { NexoPrefs.changeAutoFit(it) }
+                    Spacer(Modifier.height(10.dp))
+                    Text("Tamaño de las apps en el monitor o la TV", color = Nexo.textDim, fontSize = 13.sp)
+                    Spacer(Modifier.height(10.dp))
+                    val appCtx = androidx.compose.ui.platform.LocalContext.current
+                    Segmented(com.nexo.escritorio.AppFit.labels, NexoPrefs.appScale) {
+                        NexoPrefs.changeAppScale(it)
+                        val desk = com.nexo.escritorio.DesktopActivity.current?.get()
+                        val d = desk?.let { a -> com.nexo.escritorio.Displays.byId(appCtx, a.currentDisplayId()) }
+                        if (d != null) {
+                            if (it == com.nexo.escritorio.AppFit.ORIGINAL) com.nexo.escritorio.AppFit.resetScale(appCtx, d.displayId)
+                            else com.nexo.escritorio.AppFit.applyScale(appCtx, d)
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "En «Automática» las apps se dibujan a la escala ideal para cada pantalla: más grandes en una TV 4K, normales en un monitor. Se restaura al cerrar el escritorio." +
+                            if (com.nexo.escritorio.AppFit.canScale(appCtx)) "" else " Necesita el permiso de ADB o Shizuku (ver la app en el teléfono).",
+                        color = Nexo.textFaint,
+                        fontSize = 12.sp,
+                    )
+                    SwitchRow(
+                        "Adaptar las apps que solo funcionan en vertical",
+                        if (com.nexo.escritorio.AppFit.canForceApps) "Llenan la ventana en lugar de verse con bordes (se restaura al salir)"
+                        else "Necesita Android 14 o superior y Shizuku",
+                        NexoPrefs.forceAppsFit,
+                    ) { NexoPrefs.changeForceAppsFit(it) }
                     SwitchRow(
                         "Botones de minimizar, maximizar y cerrar en las ventanas",
                         "Con el asistente de Nexo o con Shizuku (ver la app en el teléfono)",
