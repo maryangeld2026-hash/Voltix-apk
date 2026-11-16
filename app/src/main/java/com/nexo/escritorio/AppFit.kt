@@ -71,6 +71,11 @@ object AppFit {
 
     fun resetScale(ctx: Context, displayId: Int): Boolean {
         if (displayId !in NexoPrefs.scaledDisplays) return true
+        // La pantalla ya no está conectada: no hay nada que restaurar.
+        if (Displays.byId(ctx, displayId) == null) {
+            NexoPrefs.scaledDisplays = NexoPrefs.scaledDisplays - displayId
+            return true
+        }
         val wms = ScreenFit.windowService(ctx) ?: return false
         return runCatching {
             wms.javaClass.getMethod(
