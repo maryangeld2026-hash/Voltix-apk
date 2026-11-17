@@ -1,0 +1,30 @@
+NEXO PC: el escritorio de Nexo en una ventana del computador, por el cable USB-C a USB
+====================================================================================
+
+Usa el modo accesorio de Android (AOA): va directo por el cable, sin red, sin «Módem USB» y sin depuración USB.
+
+WINDOWS
+1. Abre NexoPC.exe.
+2. Conecta el teléfono (con Nexo Escritorio 1.2 o más nuevo instalado) con el cable USB.
+3. La primera vez, Windows no deja que el programa hable con el teléfono: instala el controlador WinUSB con Zadig
+   (https://zadig.akeo.ie): Options › List All Devices, escoge tu teléfono y pulsa «Replace Driver».
+   Cuando el teléfono cambie a «Escritorio» (modo accesorio), repite con «Escritorio».
+   Ojo: mientras tenga WinUSB, el teléfono no aparece como memoria en el Explorador. Para volver atrás:
+   Administrador de dispositivos › el teléfono › Desinstalar el dispositivo, y desconecta y conecta el cable.
+4. En el teléfono, acepta «compartir la pantalla» y toca «Escritorio en este teléfono».
+
+MAC
+  pip3 install pyusb libusb-package pillow
+  python3 nexo_pc.py
+
+LINUX
+  pip3 install pyusb libusb-package pillow
+  sudo python3 nexo_pc.py      (o una regla udev para tu teléfono y para 18d1:2d00 / 18d1:2d01)
+
+USO
+- Ratón: clic, arrastrar, clic derecho (= mantener presionado), rueda.
+- Teclado: escribe en el campo que toques. Con Shizuku en el teléfono funcionan también los atajos (Ctrl+C, Alt+Tab…).
+- Tecla Windows: menú de inicio de Nexo. F11: pantalla completa.
+
+¿Prefieres no instalar nada? En el teléfono: Nexo › Escritorio en el PC › con el navegador (enciende «Módem USB»
+y abre en Chrome o Edge la dirección que aparece).

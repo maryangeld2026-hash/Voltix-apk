@@ -406,6 +406,18 @@ class NexoAccessibility : AccessibilityService() {
         }
     }
 
+    // ---------- Gestos en cualquier punto (el PC por USB) ----------
+
+    /** Un gesto con un dedo en una pantalla: tocar, arrastrar o mantener. */
+    fun gesture(displayId: Int, path: Path, duration: Long): Boolean {
+        val b = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, duration.coerceIn(1L, 59_000L)))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) b.setDisplayId(displayId)
+        return runCatching { dispatchGesture(b.build(), null, null) }.getOrDefault(false)
+    }
+
+    fun globalAction(action: Int): Boolean = performGlobalAction(action)
+
     // ---------- Escribir desde el teléfono ----------
 
     private fun focusedInput(displayId: Int): AccessibilityNodeInfo? {

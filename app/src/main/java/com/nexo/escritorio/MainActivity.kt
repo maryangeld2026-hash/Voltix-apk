@@ -239,4 +239,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+
+    /** Escritorio en el PC por el cable USB (navegador o programa Nexo PC). */
+    fun openPc() {
+        startActivity(Intent(this, com.nexo.escritorio.pc.PcActivity::class.java))
+    }
 }

@@ -3,6 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Escritorio en el PC: servidor en la red del cable USB o la Wi‑Fi, y compartir la pantalla -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-feature android:name="android.hardware.usb.accessory" android:required="false" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- Barra de tareas siempre visible encima de las apps (el usuario lo autoriza) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -68,6 +74,26 @@
             android:taskAffinity=""
             android:label="@string/desktop_label"
             android:theme="@android:style/Theme.NoDisplay" />
+
+        <!-- Escritorio en el PC por el cable USB: navegador (red del cable) o programa Nexo PC (modo accesorio) -->
+        <activity
+            android:name=".pc.PcActivity"
+            android:exported="true"
+            android:label="Nexo: escritorio en el PC"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Nexo">
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED"
+                android:resource="@xml/accessory_filter" />
+        </activity>
+
+        <service
+            android:name=".pc.PcService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
 
         <!-- Puerta para Jarvis: abrir el escritorio, apps en ventana, el touchpad… (invisible) -->
         <activity

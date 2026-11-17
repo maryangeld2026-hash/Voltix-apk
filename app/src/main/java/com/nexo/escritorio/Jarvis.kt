@@ -91,6 +91,10 @@ object Jarvis {
             .putExtra("abierto", desk != null && !desk.isFinishing)
             .putExtra("dondeAbierto", if (desk == null) "" else if (desk.currentDisplayId() == Display.DEFAULT_DISPLAY) "celular" else "monitor")
             .putExtra("version", runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "")
+            .putExtra("pcActivo", com.nexo.escritorio.pc.PcService.estado.value.activo)
+            .putExtra("pcUrl", com.nexo.escritorio.pc.PcService.estado.value.url)
+            .putExtra("pcClave", com.nexo.escritorio.pc.PcService.estado.value.clave)
+            .putExtra("pcPrograma", com.nexo.escritorio.pc.PcService.estado.value.programa)
             .putExtra("ventanas", runCatching { WindowControls.state.value.all.mapNotNull { it.pkg }.distinct().size }.getOrDefault(0))
         runCatching { ctx.sendBroadcast(i) }
     }
@@ -142,6 +146,17 @@ class NexoApiActivity : Activity() {
 
         when (accion) {
             "estado" -> Jarvis.responder(this, id, true, "")
+            "pc" -> {
+                startActivity(Intent(this, com.nexo.escritorio.pc.PcActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra("empezar", i.getBooleanExtra("empezar", false)))
+                val e = com.nexo.escritorio.pc.PcService.estado.value
+                Jarvis.responder(this, id, true, if (e.activo) "El escritorio ya se está compartiendo con el PC." else "Abrí «Escritorio en el PC» en Nexo.")
+            }
+            "pc_parar" -> {
+                com.nexo.escritorio.pc.PcService.parar(this)
+                Jarvis.responder(this, id, true, "Dejé de compartir el escritorio con el PC.")
+            }
             "abrir" -> when {
                 monitor == null && desk == null -> Jarvis.responder(this, id, false, sinMonitor, "sin_monitor")
                 abrirEscritorio() -> Jarvis.responder(this, id, true, "Escritorio abierto en ${monitor?.name ?: "la pantalla"}.")

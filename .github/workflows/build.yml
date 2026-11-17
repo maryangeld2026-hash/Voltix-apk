@@ -50,3 +50,30 @@ jobs:
             Escritorio para Android en un monitor externo, sin root.
 
             **Instalación:** descarga `NexoEscritorio.apk` aquí abajo, ábrelo en el teléfono y permite instalar apps de origen desconocido si te lo pide.
+
+  # Nexo PC: el programa para el computador (modo accesorio por el cable USB)
+  pc:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compilar NexoPC.exe
+        shell: bash
+        run: |
+          pip install pyinstaller pyusb libusb-package pillow
+          pyinstaller --onefile --windowed --name NexoPC --collect-all libusb_package pc-programa/nexo_pc.py
+          mkdir NexoPC
+          cp dist/NexoPC.exe pc-programa/nexo_pc.py pc-programa/LEEME.txt NexoPC/
+          7z a NexoPC.zip NexoPC
+
+      - name: Publicar en la Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nexo-escritorio
+          make_latest: false
+          files: NexoPC.zip

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- El programa «Nexo PC» se presenta así en modo accesorio (AOA) -->
+<resources>
+    <usb-accessory manufacturer="Nexo" model="Escritorio" />
+</resources>

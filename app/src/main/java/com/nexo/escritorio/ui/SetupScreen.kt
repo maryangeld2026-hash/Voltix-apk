@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cast
+import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DesktopWindows
@@ -95,7 +96,7 @@ private const val SHIZUKU_ADB =
 
 private const val SCRCPY_USB = "scrcpy --new-display=1920x1080/160 --start-app=$PKG"
 
-private enum class Conn { CABLE, WIRELESS, PC, PHONE }
+private enum class Conn { CABLE, WIRELESS, USBPC, PC, PHONE }
 
 /** Pantalla principal en el teléfono. */
 @Composable
@@ -164,6 +165,22 @@ fun SetupScreen(tick: Int, display: Display?, host: MainActivity) {
                         GhostButton("Escritorio en este teléfono") { host.previewHere() }
                     }
                     Note("Por Wi‑Fi hay un poco de retraso: perfecto para trabajar, navegar y ver videos; para juegos rápidos es mejor el cable o el computador.")
+                }
+
+                ConnectionCard(
+                    icon = Icons.Rounded.Computer,
+                    title = "PC por cable USB (sin instalar nada)",
+                    badge = "Cualquier teléfono · cable USB‑C a USB",
+                    summary = "El escritorio en el navegador del PC por el cable USB normal, con el ratón y el teclado del PC. Sin salida de video ni depuración USB.",
+                    expanded = open == Conn.USBPC,
+                    onToggle = { toggle(Conn.USBPC) },
+                ) {
+                    MiniStep(1, "Conecta el teléfono al PC con el cable y enciende «Módem USB».")
+                    MiniStep(2, "Toca «Escritorio en el PC», luego «Empezar».")
+                    MiniStep(3, "En el PC abre Chrome o Edge y escribe la dirección que aparece, con la clave.")
+                    Note("O con el programa Nexo PC (modo accesorio de Android): va directo por el cable, sin red.")
+                    Spacer(Modifier.height(10.dp))
+                    PrimaryButton("Escritorio en el PC") { host.openPc() }
                 }
 
                 ConnectionCard(
@@ -518,7 +535,7 @@ private fun ConnectionCard(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FlowRow2(content: @Composable () -> Unit) {
+internal fun FlowRow2(content: @Composable () -> Unit) {
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -540,7 +557,7 @@ private fun IconBadge(icon: ImageVector) {
 }
 
 @Composable
-private fun MiniStep(n: Int, text: String) {
+internal fun MiniStep(n: Int, text: String) {
     Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
         Box(
             Modifier
@@ -557,12 +574,12 @@ private fun MiniStep(n: Int, text: String) {
 }
 
 @Composable
-private fun Note(text: String) {
+internal fun Note(text: String) {
     Text(text, color = Nexo.textFaint, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
 }
 
 @Composable
-private fun Card(content: @Composable ColumnScope.() -> Unit) {
+internal fun Card(content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -642,7 +659,7 @@ private fun Tip(icon: ImageVector, text: String) {
 }
 
 @Composable
-private fun CodeBlock(code: String, onCopy: () -> Unit) {
+internal fun CodeBlock(code: String, onCopy: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -673,7 +690,7 @@ private fun CodeBlock(code: String, onCopy: () -> Unit) {
 }
 
 @Composable
-private fun PrimaryButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun PrimaryButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val accent = LocalAccent.current
     Box(
         modifier
@@ -688,7 +705,7 @@ private fun PrimaryButton(label: String, modifier: Modifier = Modifier, onClick:
 }
 
 @Composable
-private fun GhostButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun GhostButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
         modifier
             .clip(RoundedCornerShape(14.dp))

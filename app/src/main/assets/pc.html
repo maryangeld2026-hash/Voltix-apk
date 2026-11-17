@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nexo Escritorio</title>
+<style>
+  :root { --bg: #070a12; --panel: rgba(20, 26, 40, .82); --line: rgba(255, 255, 255, .12); --text: #eef1f8; --dim: #9aa3b8; --a: #4cc9f0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  #pantalla { position: fixed; inset: 0 0 44px 0; display: grid; place-items: center; }
+  canvas { max-width: 100%; max-height: 100%; cursor: default; outline: none; touch-action: none; image-rendering: auto; }
+  body.completa #pantalla { inset: 0; }
+  body.completa #barra { opacity: 0; } body.completa #barra:hover { opacity: 1; }
+  #barra { position: fixed; left: 0; right: 0; bottom: 0; height: 44px; display: flex; align-items: center; gap: 6px; padding: 0 10px; background: var(--panel); border-top: 1px solid var(--line); backdrop-filter: blur(14px); transition: opacity .2s; }
+  #barra button { background: rgba(255, 255, 255, .06); color: var(--text); border: 1px solid var(--line); border-radius: 9px; padding: 6px 10px; font: inherit; cursor: pointer; }
+  #barra button:hover { background: rgba(76, 201, 240, .18); }
+  #barra .sep { flex: 1; }
+  #estado { color: var(--dim); font-size: 12.5px; white-space: nowrap; }
+  #estado b { color: var(--a); }
+  #entrar { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 30%, #13213b, var(--bg)); }
+  #entrar form { width: min(380px, 92vw); padding: 26px; border-radius: 20px; background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+  #entrar h1 { margin: 0; font-size: 22px; }
+  #entrar input { font-size: 26px; letter-spacing: .3em; text-align: center; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: rgba(0, 0, 0, .3); color: var(--text); }
+  #entrar button { padding: 11px; border-radius: 12px; border: 0; background: var(--a); color: #04121a; font-weight: 700; font-size: 15px; cursor: pointer; }
+  #entrar p { margin: 0; color: var(--dim); font-size: 13px; }
+  #aviso { position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); padding: 10px 14px; border-radius: 12px; max-width: 90vw; display: none; }
+</style>
+</head>
+<body>
+<div id="entrar" hidden>
+  <form id="f">
+    <h1>Nexo Escritorio</h1>
+    <p>Escribe la clave de 6 cifras que muestra el teléfono en Nexo › Escritorio en el PC.</p>
+    <input id="clave" inputmode="numeric" maxlength="6" autocomplete="off" autofocus>
+    <button type="submit">Conectar</button>
+  </form>
+</div>
+<div id="pantalla"><canvas id="c" tabindex="0" width="1280" height="720"></canvas></div>
+<div id="barra">
+  <button data-a="start" title="Menú de inicio (tecla Windows)">⊞ Inicio</button>
+  <button data-a="back" title="Atrás (Esc)">← Atrás</button>
+  <button data-a="home" title="Pantalla de inicio de Android">○</button>
+  <button data-a="recents" title="Apps recientes">▢</button>
+  <button data-a="notifs" title="Notificaciones">🔔</button>
+  <button id="pegar" title="Escribir o pegar un texto en el teléfono">📋 Texto</button>
+  <span class="sep"></span>
+  <span id="estado">Conectando…</span>
+  <button id="completa" title="Pantalla completa (F11)">⛶</button>
+</div>
+<div id="aviso"></div>
+<script>
+(function () {
+  "use strict";
+  const $ = (s) => document.querySelector(s);
+  const c = $("#c"), g = c.getContext("2d"), est = $("#estado");
+  let clave = new URLSearchParams(location.search).get("k") || "";
+  let ws = null, info = {}, cuadros = 0, ultimoSeg = Date.now(), fps = 0, abajo = false, reintento = 0;
+
+  function aviso(t) { const a = $("#aviso"); a.textContent = t; a.style.display = "block"; clearTimeout(aviso.t); aviso.t = setTimeout(() => (a.style.display = "none"), 5000); }
+  function enviar(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+
+  function conectar() {
+    if (!clave) { $("#entrar").hidden = false; $("#clave").focus(); return; }
+    $("#entrar").hidden = true;
+    est.textContent = "Conectando…";
+    ws = new WebSocket(`ws://${location.host}/ws?k=${encodeURIComponent(clave)}`);
+    ws.binaryType = "blob";
+    ws.onopen = () => { reintento = 0; est.innerHTML = "<b>●</b> Conectado"; c.focus(); };
+    ws.onmessage = async (m) => {
+      if (typeof m.data === "string") {
+        const j = JSON.parse(m.data);
+        if (j.t === "info") { info = j; if (!j.asistente && !j.shizuku) aviso("El teléfono no tiene el asistente de Nexo ni Shizuku: solo puedes ver la pantalla."); }
+        if (j.t === "aviso") aviso(j.s);
+        return;
+      }
+      try {
+        const bm = await createImageBitmap(m.data);
+        if (c.width !== bm.width || c.height !== bm.height) { c.width = bm.width; c.height = bm.height; }
+        g.drawImage(bm, 0, 0); bm.close && bm.close();
+        cuadros++;
+        const ahora = Date.now();
+        if (ahora - ultimoSeg >= 1000) { fps = cuadros; cuadros = 0; ultimoSeg = ahora; est.innerHTML = `<b>●</b> Conectado · ${fps} cuadros/s${info.modelo ? " · " + info.modelo : ""}`; }
+      } catch (e) { /* cuadro dañado */ }
+    };
+    ws.onclose = (ev) => {
+      est.textContent = "Desconectado: reintentando…";
+      if (ev.code === 1006 && reintento > 2 && !navigator.onLine) est.textContent = "Sin conexión con el teléfono";
+      setTimeout(conectar, Math.min(5000, 800 * ++reintento));
+    };
+  }
+  $("#f").addEventListener("submit", (e) => { e.preventDefault(); clave = $("#clave").value.trim(); history.replaceState(null, "", "?k=" + clave); conectar(); });
+
+  // ratón → proporción de la imagen (0 a 1)
+  function pos(e) { const r = c.getBoundingClientRect(); return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) }; }
+  let ultMov = 0;
+  c.addEventListener("pointerdown", (e) => { c.focus(); c.setPointerCapture(e.pointerId); abajo = true; enviar(Object.assign({ t: "down", b: e.button }, pos(e))); e.preventDefault(); });
+  c.addEventListener("pointermove", (e) => { if (!abajo) return; const t = performance.now(); if (t - ultMov < 16) return; ultMov = t; enviar(Object.assign({ t: "move" }, pos(e))); });
+  c.addEventListener("pointerup", (e) => { if (!abajo) return; abajo = false; enviar(Object.assign({ t: "up", b: e.button }, pos(e))); });
+  c.addEventListener("contextmenu", (e) => e.preventDefault());
+  let ultRueda = 0;
+  c.addEventListener("wheel", (e) => { e.preventDefault(); const t = performance.now(); if (t - ultRueda < 90) return; ultRueda = t; enviar(Object.assign({ t: "wheel", dy: e.deltaY }, pos(e))); }, { passive: false });
+
+  // teclado
+  window.addEventListener("keydown", (e) => {
+    if (!$("#entrar").hidden || document.activeElement === $("#clave")) return;
+    if (e.code === "F11") return;
+    if ((e.ctrlKey || e.metaKey) && e.code === "KeyV") return;                       // pegar: lo maneja «paste»
+    e.preventDefault();
+    if (["ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight"].includes(e.code)) return;
+    enviar({ t: "key", code: e.code, key: e.key, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey });
+  });
+  window.addEventListener("paste", (e) => { const t = (e.clipboardData || window.clipboardData).getData("text"); if (t) enviar({ t: "text", s: t }); e.preventDefault(); });
+
+  // barra
+  document.querySelectorAll("#barra [data-a]").forEach((b) => b.addEventListener("click", () => { enviar({ t: "btn", a: b.dataset.a }); c.focus(); }));
+  $("#pegar").addEventListener("click", () => { const t = prompt("Texto para escribir en el teléfono:"); if (t) enviar({ t: "text", s: t }); c.focus(); });
+  $("#completa").addEventListener("click", () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); });
+  document.addEventListener("fullscreenchange", () => document.body.classList.toggle("completa", !!document.fullscreenElement));
+
+  conectar();
+})();
+</script>
+</body>
+</html>
