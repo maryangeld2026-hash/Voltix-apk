@@ -12,8 +12,8 @@ android {
         applicationId = "com.nexo.escritorio"
         minSdk = 29          // Android 10: primer Android con escritorio en pantallas externas
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     buildTypes {

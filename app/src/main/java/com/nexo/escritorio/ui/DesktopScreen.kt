@@ -411,6 +411,16 @@ fun BoxScope.ChromeLayer(
                 maxH = maxH - (TASKBAR_RESERVE_DP + 28).dp,
             )
         }
+
+        // La respuesta de Jarvis a lo que le preguntaste desde el escritorio
+        if (!ui.panelOpen && !ui.startOpen) {
+            JarvisCard(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 12.dp, bottom = (TASKBAR_RESERVE_DP + 4).dp),
+                actions,
+            )
+        }
     }
 
     Taskbar(

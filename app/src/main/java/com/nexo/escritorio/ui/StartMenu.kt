@@ -33,6 +33,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Person
@@ -107,9 +108,17 @@ fun StartMenu(
         ui.closeAll()
         actions.launch(app)
     }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val conJarvis = remember { com.nexo.escritorio.Jarvis.instalado(ctx) }
+    val askJarvis: () -> Unit = {
+        ui.closeAll()
+        com.nexo.escritorio.Jarvis.preguntar(actions, com.nexo.escritorio.Jarvis.limpiar(query))
+    }
     val launchFirst: () -> Unit = {
         val first = results.firstOrNull()
-        if (first != null) {
+        if (conJarvis && query.isNotEmpty() && com.nexo.escritorio.Jarvis.esPregunta(query)) {
+            askJarvis()
+        } else if (first != null) {
             open(first)
         } else if (query.isNotEmpty()) {
             ui.closeAll()
@@ -143,7 +152,7 @@ fun StartMenu(
             if (query.isEmpty()) {
                 AllApps(pinned, apps, open, onAppMenu)
             } else {
-                SearchResults(results, query, open, onAppMenu) {
+                SearchResults(results, query, open, onAppMenu, if (conJarvis) askJarvis else null) {
                     ui.closeAll()
                     actions.webSearch(query)
                 }
@@ -296,9 +305,11 @@ private fun SearchResults(
     query: String,
     onOpen: (AppEntry) -> Unit,
     onMenu: (AppEntry, Offset) -> Unit,
+    onJarvis: (() -> Unit)?,
     onWeb: () -> Unit,
 ) {
     val accent = LocalAccent.current
+    val jarvisFirst = onJarvis != null && com.nexo.escritorio.Jarvis.esPregunta(query)
     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         item {
             SectionLabel(
@@ -309,7 +320,7 @@ private fun SearchResults(
         itemsIndexed(results.take(30), key = { _, app -> app.key }) { index, app ->
             val source = remember { MutableInteractionSource() }
             val hovered by source.collectIsHoveredAsState()
-            val first = index == 0
+            val first = index == 0 && !jarvisFirst
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -336,6 +347,49 @@ private fun SearchResults(
                 if (first) KeyHint("Intro")
             }
         }
+        if (onJarvis != null) item {
+            val source = remember { MutableInteractionSource() }
+            val hovered by source.collectIsHoveredAsState()
+            Row(
+                Modifier
+                    .padding(top = 6.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        when {
+                            jarvisFirst -> accent.copy(alpha = 0.16f)
+                            hovered -> Nexo.hover
+                            else -> Color.Transparent
+                        }
+                    )
+                    .hoverable(source)
+                    .clickable(interactionSource = source, indication = null, onClick = onJarvis)
+                    .padding(horizontal = 12.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Brush.linearGradient(listOf(accent, lerp(accent, Color.White, 0.4f)))),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Rounded.AutoAwesome, null, tint = Nexo.onAccent, modifier = Modifier.size(19.dp))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Preguntar a Jarvis: «${com.nexo.escritorio.Jarvis.limpiar(query)}»",
+                        color = Nexo.text,
+                        fontSize = 15.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text("La IA de tu asistente responde en una ventana", color = Nexo.textDim, fontSize = 12.sp)
+                }
+                if (jarvisFirst) KeyHint("Intro")
+            }
+        }
         item {
             val source = remember { MutableInteractionSource() }
             val hovered by source.collectIsHoveredAsState()
@@ -346,7 +400,7 @@ private fun SearchResults(
                     .clip(RoundedCornerShape(12.dp))
                     .background(
                         when {
-                            results.isEmpty() -> accent.copy(alpha = 0.16f)
+                            results.isEmpty() && !jarvisFirst -> accent.copy(alpha = 0.16f)
                             hovered -> Nexo.hover
                             else -> Color.Transparent
                         }
@@ -374,7 +428,7 @@ private fun SearchResults(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (results.isEmpty()) KeyHint("Intro")
+                if (results.isEmpty() && !jarvisFirst) KeyHint("Intro")
             }
         }
     }
@@ -417,6 +471,10 @@ private fun StartFooter(ui: DesktopUi, actions: DesktopActions) {
         Column(Modifier.weight(1f)) {
             Text("Mi escritorio", color = Nexo.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             Text(deviceName(), color = Nexo.textDim, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        val fctx = androidx.compose.ui.platform.LocalContext.current
+        if (remember { com.nexo.escritorio.Jarvis.instalado(fctx) }) {
+            FooterButton(Icons.Rounded.AutoAwesome, "Hablar con Jarvis") { ui.closeAll(); com.nexo.escritorio.Jarvis.hablar(actions) }
         }
         FooterButton(Icons.Rounded.Folder, "Archivos") { ui.closeAll(); actions.files() }
         FooterButton(Icons.Rounded.Settings, "Ajustes del teléfono") {

@@ -28,6 +28,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BatteryAlert
 import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.BatteryFull
@@ -104,6 +105,15 @@ fun Taskbar(
         ) {
             StartButton(open = ui.startOpen) { ui.toggleStart() }
             BarIconButton(Icons.Rounded.Search, "Buscar") { ui.toggleStart() }
+            // Jarvis: tócalo y te escucha en una ventana del monitor
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val conJarvis = remember { com.nexo.escritorio.Jarvis.instalado(ctx) }
+            if (conJarvis) {
+                BarIconButton(Icons.Rounded.AutoAwesome, "Hablar con Jarvis") {
+                    ui.closeAll()
+                    com.nexo.escritorio.Jarvis.hablar(actions)
+                }
+            }
             if (shown.isNotEmpty()) {
                 Box(
                     Modifier
