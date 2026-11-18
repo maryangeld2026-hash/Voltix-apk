@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PowerSettingsNew
+import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Tune
@@ -475,6 +476,7 @@ private fun StartFooter(ui: DesktopUi, actions: DesktopActions) {
         val fctx = androidx.compose.ui.platform.LocalContext.current
         if (remember { com.nexo.escritorio.Jarvis.instalado(fctx) }) {
             FooterButton(Icons.Rounded.AutoAwesome, "Hablar con Jarvis") { ui.closeAll(); com.nexo.escritorio.Jarvis.hablar(actions) }
+            FooterButton(Icons.Rounded.Science, "Probar la IA de Jarvis (todos los modelos)") { ui.closeAll(); com.nexo.escritorio.Jarvis.preguntar(actions, "prueba los modelos") }
         }
         FooterButton(Icons.Rounded.Folder, "Archivos") { ui.closeAll(); actions.files() }
         FooterButton(Icons.Rounded.Settings, "Ajustes del teléfono") {

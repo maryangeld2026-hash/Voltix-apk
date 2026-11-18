@@ -114,7 +114,10 @@ private fun CardButton(icon: androidx.compose.ui.graphics.vector.ImageVector, la
 
 /** Quita el formato de Markdown y LaTeX más común (la tarjeta muestra texto plano). */
 private fun limpiarMd(t: String): String =
-    t.replace(Regex("\\*\\*(.+?)\\*\\*"), "$1")
+    t.replace(Regex("(?m)^\\|\\s*-{3,}.*$\\n?"), "")                         // tablas: sin la línea de guiones
+        .replace(Regex("(?m)^\\|(.+)\\|\\s*$")) { m -> m.groupValues[1].split("|").joinToString("  —  ") { it.trim() } }
+        .replace("`", "")
+        .replace(Regex("\\*\\*(.+?)\\*\\*"), "$1")
         .replace(Regex("(?m)^#{1,6}\\s*"), "")
         .replace(Regex("(?m)^[-*]\\s+"), "• ")
         .replace(Regex("\\$([^$]+)\\$"), "$1")
